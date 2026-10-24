@@ -1,3 +1,4 @@
+
 import sys
 
 
@@ -6,7 +7,13 @@ def main():
         sys.stdout.write("$ ")
         sys.stdout.flush()
         command = input()
-        print(f"{command}: command not found")
+
+        if command == "exit":
+            break
+        elif command.startswith("echo "):
+            print(command[5:])
+        else:
+            print(f"{command}: command not found")
 
 
 if __name__ == "__main__":
