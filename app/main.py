@@ -1,4 +1,5 @@
 
+import os
 import sys
 
 
@@ -15,21 +16,37 @@ def main():
         if not parts:
             continue
 
-        if parts[0] == "exit":
+        name = parts[0]
+
+        if name == "exit":
             break
-        elif parts[0] == "echo":
+        elif name == "echo":
             print(command[5:] if command.startswith("echo ") else "")
-        elif parts[0] == "type":
-            if len(parts) > 1:
-                name = parts[1]
-                if name in builtins:
-                    print(f"{name} is a shell builtin")
-                else:
-                    print(f"{name}: not found")
-            else:
+        elif name == "type":
+            if len(parts) < 2:
                 print("type: not found")
+                continue
+
+            target = parts[1]
+
+            if target in builtins:
+                print(f"{target} is a shell builtin")
+            else:
+                found = None
+
+                for directory in os.environ.get("PATH", "").split(os.pathsep):
+                    path = os.path.join(directory, target)
+
+                    if os.path.isfile(path) and os.access(path, os.X_OK):
+                        found = path
+                        break
+
+                if found:
+                    print(f"{target} is {found}")
+                else:
+                    print(f"{target}: not found")
         else:
-            print(f"{parts[0]}: command not found")
+            print(f"{name}: command not found")
 
 
 if __name__ == "__main__":
