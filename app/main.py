@@ -35,10 +35,13 @@ def main():
 
             directory = args[0]
 
+            if directory == "~":
+                directory = os.environ.get("HOME", "")
+
             try:
                 os.chdir(directory)
             except OSError:
-                print(f"cd: {directory}: No such file or directory")
+                print(f"cd: {args[0]}: No such file or directory")
 
         elif name == "echo":
             print(command[5:] if command.startswith("echo ") else "")
