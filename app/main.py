@@ -1,11 +1,10 @@
-
 import os
 import sys
 import subprocess
 
 
 def main():
-    builtins = ["echo", "exit", "type", "pwd"]
+    builtins = ["echo", "exit", "type", "pwd", "cd"]
 
     while True:
         sys.stdout.write("$ ")
@@ -29,6 +28,18 @@ def main():
 
         elif name == "pwd":
             print(os.getcwd())
+
+        elif name == "cd":
+            if not args:
+                continue
+
+            directory = args[0]
+
+            if os.path.isabs(directory):
+                try:
+                    os.chdir(directory)
+                except OSError:
+                    print(f"cd: {directory}: No such file or directory")
 
         elif name == "echo":
             print(command[5:] if command.startswith("echo ") else "")
