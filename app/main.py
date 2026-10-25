@@ -86,7 +86,7 @@ def main():
 
             if executable:
                 try:
-                    subprocess.run([executable] + args)
+                    subprocess.run([name] + args, executable=executable)
                 except OSError:
                     print(f"{name}: command not found")
             else:
