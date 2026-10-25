@@ -1,7 +1,70 @@
 import os
 import sys
 import subprocess
-import shlex
+
+
+def parse_command(command):
+    args = []
+    current = []
+    quote = None
+    i = 0
+    started = False
+
+    while i < len(command):
+        char = command[i]
+
+        if quote == "'":
+            if char == "'":
+                quote = None
+            else:
+                current.append(char)
+            started = True
+
+        elif quote == '"':
+            if char == '"':
+                quote = None
+            elif char == "\\":
+                if i + 1 < len(command) and command[i + 1] in ['"', '\\']:
+                    i += 1
+                    current.append(command[i])
+                else:
+                    current.append(char)
+            else:
+                current.append(char)
+            started = True
+
+        else:
+            if char in ("'", '"'):
+                quote = char
+                started = True
+            elif char == "\\":
+                if i + 1 < len(command):
+                    i += 1
+                    current.append(command[i])
+                started = True
+            elif char.isspace():
+                if started:
+                    args.append("".join(current))
+                    current = []
+                    started = False
+            else:
+                current.append(char)
+                started = True
+
+        i += 1
+
+    if started:
+        args.append("".join(current))
+
+    return args
+
+
+def find_executable(name):
+    for directory in os.environ.get("PATH", "").split(os.pathsep):
+        path = os.path.join(directory, name)
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+    return None
 
 
 def main():
@@ -16,10 +79,27 @@ def main():
         except EOFError:
             break
 
-        try:
-            parts = shlex.split(command, posix=True)
-        except ValueError:
+        parts = parse_command(command)
+
+        if not parts:
             continue
+
+        output_file = None
+        filtered_parts = []
+        i = 0
+
+        while i < len(parts):
+            if parts[i] in (">", "1>"):
+                if i + 1 < len(parts):
+                    output_file = parts[i + 1]
+                    i += 2
+                else:
+                    i += 1
+            else:
+                filtered_parts.append(parts[i])
+                i += 1
+
+        parts = filtered_parts
 
         if not parts:
             continue
@@ -27,70 +107,87 @@ def main():
         name = parts[0]
         args = parts[1:]
 
-        if name == "exit":
-            break
-
-        elif name == "pwd":
-            print(os.getcwd())
-
-        elif name == "cd":
-            if not args:
-                continue
-
-            directory = args[0]
-
-            if directory == "~":
-                directory = os.environ.get("HOME", "")
-
+        if output_file is not None:
             try:
-                os.chdir(directory)
+                output = open(output_file, "w")
             except OSError:
-                print(f"cd: {args[0]}: No such file or directory")
-
-        elif name == "echo":
-            print(" ".join(args))
-
-        elif name == "type":
-            if not args:
-                print("type: not found")
                 continue
-
-            target = args[0]
-
-            if target in builtins:
-                print(f"{target} is a shell builtin")
-            else:
-                found = None
-
-                for directory in os.environ.get("PATH", "").split(os.pathsep):
-                    path = os.path.join(directory, target)
-
-                    if os.path.isfile(path) and os.access(path, os.X_OK):
-                        found = path
-                        break
-
-                if found:
-                    print(f"{target} is {found}")
-                else:
-                    print(f"{target}: not found")
-
         else:
-            executable = None
+            output = None
 
-            for directory in os.environ.get("PATH", "").split(os.pathsep):
-                path = os.path.join(directory, name)
+        try:
+            if name == "exit":
+                if output:
+                    output.close()
+                break
 
-                if os.path.isfile(path) and os.access(path, os.X_OK):
-                    executable = path
-                    break
+            elif name == "pwd":
+                print(os.getcwd(), file=output or sys.stdout)
 
-            if executable:
+            elif name == "cd":
+                if not args:
+                    continue
+
+                directory = args[0]
+
+                if directory == "~":
+                    directory = os.environ.get("HOME", "")
+
                 try:
-                    subprocess.run([name] + args, executable=executable)
+                    os.chdir(directory)
                 except OSError:
-                    print(f"{name}: command not found")
+                    print(
+                        f"cd: {args[0]}: No such file or directory",
+                        file=sys.stderr
+                    )
+
+            elif name == "echo":
+                print(" ".join(args), file=output or sys.stdout)
+
+            elif name == "type":
+                if not args:
+                    print("type: not found", file=output or sys.stdout)
+                    continue
+
+                target = args[0]
+
+                if target in builtins:
+                    print(
+                        f"{target} is a shell builtin",
+                        file=output or sys.stdout
+                    )
+                else:
+                    found = find_executable(target)
+
+                    if found:
+                        print(
+                            f"{target} is {found}",
+                            file=output or sys.stdout
+                        )
+                    else:
+                        print(
+                            f"{target}: not found",
+                            file=output or sys.stdout
+                        )
+
             else:
-                print(f"{name}: command not found")
+                executable = find_executable(name)
+
+                if executable:
+                    try:
+                        subprocess.run(
+                            [name] + args,
+                            executable=executable,
+                            stdout=output
+                        )
+                    except OSError:
+                        print(f"{name}: command not found", file=sys.stderr)
+                else:
+                    print(f"{name}: command not found", file=sys.stderr)
+
+        finally:
+            if output:
+                output.close()
 
 
 if __name__ == "__main__":
