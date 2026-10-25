@@ -5,7 +5,7 @@ import subprocess
 
 
 def main():
-    builtins = ["echo", "exit", "type"]
+    builtins = ["echo", "exit", "type", "pwd"]
 
     while True:
         sys.stdout.write("$ ")
@@ -26,6 +26,9 @@ def main():
 
         if name == "exit":
             break
+
+        elif name == "pwd":
+            print(os.getcwd())
 
         elif name == "echo":
             print(command[5:] if command.startswith("echo ") else "")
