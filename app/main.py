@@ -1,6 +1,7 @@
 import os
 import sys
 import subprocess
+import shlex
 
 
 def main():
@@ -15,7 +16,10 @@ def main():
         except EOFError:
             break
 
-        parts = command.split()
+        try:
+            parts = shlex.split(command, posix=True)
+        except ValueError:
+            continue
 
         if not parts:
             continue
@@ -44,7 +48,7 @@ def main():
                 print(f"cd: {args[0]}: No such file or directory")
 
         elif name == "echo":
-            print(command[5:] if command.startswith("echo ") else "")
+            print(" ".join(args))
 
         elif name == "type":
             if not args:
@@ -82,7 +86,7 @@ def main():
 
             if executable:
                 try:
-                    subprocess.run([name] + args, executable=executable)
+                    subprocess.run([executable] + args)
                 except OSError:
                     print(f"{name}: command not found")
             else:
