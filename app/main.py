@@ -1,3 +1,4 @@
+
 import os
 import sys
 import subprocess
@@ -37,29 +38,36 @@ def parse_command(command):
             if char in ("'", '"'):
                 quote = char
                 started = True
+
             elif char == "\\":
                 if i + 1 < len(command):
                     i += 1
                     current.append(command[i])
                 started = True
-            elif char.isspace():
-                if started:
-                    args.append("".join(current))
-                    current = []
-                    started = False
-            elif char in (">",) or (
-                char == "2" and i + 1 < len(command) and command[i + 1] == ">"
-            ):
+
+            elif command[i:i + 2] in ("1>", "2>"):
                 if started:
                     args.append("".join(current))
                     current = []
                     started = False
 
-                if char == "2" and i + 1 < len(command) and command[i + 1] == ">":
-                    args.append("2>")
-                    i += 1
-                else:
-                    args.append(">")
+                args.append(command[i:i + 2])
+                i += 1
+
+            elif char == ">":
+                if started:
+                    args.append("".join(current))
+                    current = []
+                    started = False
+
+                args.append(">")
+
+            elif char.isspace():
+                if started:
+                    args.append("".join(current))
+                    current = []
+                    started = False
+
             else:
                 current.append(char)
                 started = True
@@ -109,12 +117,14 @@ def main():
                     i += 2
                 else:
                     i += 1
+
             elif parts[i] == "2>":
                 if i + 1 < len(parts):
                     error_file = parts[i + 1]
                     i += 2
                 else:
                     i += 1
+
             else:
                 filtered_parts.append(parts[i])
                 i += 1
@@ -138,9 +148,9 @@ def main():
                 error_output = open(error_file, "w")
 
         except OSError:
-            if output:
+            if output is not None:
                 output.close()
-            if error_output:
+            if error_output is not None:
                 error_output.close()
             continue
 
@@ -208,9 +218,10 @@ def main():
                     print(f"{name}: command not found", file=stderr_target)
 
         finally:
-            if output:
+            if output is not None:
                 output.close()
-            if error_output:
+
+            if error_output is not None:
                 error_output.close()
 
 
