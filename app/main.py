@@ -54,7 +54,6 @@ def parse_command(command):
                     args.append("".join(current))
                     current = []
                     started = False
-
                 args.append(command[i:i + 3])
                 i += 2
 
@@ -63,7 +62,6 @@ def parse_command(command):
                     args.append("".join(current))
                     current = []
                     started = False
-
                 args.append(">>")
                 i += 1
 
@@ -72,7 +70,6 @@ def parse_command(command):
                     args.append("".join(current))
                     current = []
                     started = False
-
                 args.append(command[i:i + 2])
                 i += 1
 
@@ -81,7 +78,6 @@ def parse_command(command):
                     args.append("".join(current))
                     current = []
                     started = False
-
                 args.append(">")
 
             elif char.isspace():
