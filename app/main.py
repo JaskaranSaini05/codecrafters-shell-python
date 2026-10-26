@@ -2,6 +2,10 @@
 import os
 import sys
 import subprocess
+import readline
+
+
+BUILTINS = ["echo", "exit", "type", "pwd", "cd"]
 
 
 def parse_command(command):
@@ -106,15 +110,31 @@ def find_executable(name):
     return None
 
 
+def completer(text, state):
+    matches = [
+        command + " "
+        for command in ("echo", "exit")
+        if command.startswith(text)
+    ]
+
+    if state < len(matches):
+        return matches[state]
+
+    return None
+
+
+readline.set_completer(completer)
+
+try:
+    readline.parse_and_bind("tab: complete")
+except Exception:
+    pass
+
+
 def main():
-    builtins = ["echo", "exit", "type", "pwd", "cd"]
-
     while True:
-        sys.stdout.write("$ ")
-        sys.stdout.flush()
-
         try:
-            command = input()
+            command = input("$ ")
         except EOFError:
             break
 
@@ -215,7 +235,7 @@ def main():
 
                 target = args[0]
 
-                if target in builtins:
+                if target in BUILTINS:
                     print(f"{target} is a shell builtin", file=stdout_target)
                 else:
                     found = find_executable(target)
