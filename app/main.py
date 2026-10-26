@@ -6,6 +6,8 @@ import readline
 
 
 BUILTINS = ["echo", "exit", "type", "pwd", "cd"]
+last_completion_text = None
+tab_count = 0
 
 
 def parse_command(command):
@@ -111,12 +113,12 @@ def find_executable(name):
     return None
 
 
-def completer(text, state):
-    matches = []
+def get_completions(text):
+    matches = set()
 
     for command in BUILTINS:
         if command.startswith(text):
-            matches.append(command)
+            matches.add(command)
 
     for directory in os.environ.get("PATH", "").split(os.pathsep):
         if not directory:
@@ -128,17 +130,70 @@ def completer(text, state):
                     path = os.path.join(directory, filename)
 
                     if os.path.isfile(path) and os.access(path, os.X_OK):
-                        if filename not in matches:
-                            matches.append(filename)
+                        matches.add(filename)
         except OSError:
             continue
 
-    matches = sorted(set(matches))
+    return sorted(matches)
 
-    if state < len(matches):
-        return matches[state] + " "
+
+def completer(text, state):
+    global last_completion_text, tab_count
+
+    if state == 0:
+        last_completion_text = text
+        tab_count = 0
+
+    matches = get_completions(text)
+
+    if len(matches) == 1:
+        if state == 0:
+            return matches[0] + " "
+        return None
+
+    if len(matches) > 1:
+        if state == 0:
+            tab_count += 1
+            return matches[0]
+
+        if state < len(matches):
+            return matches[state]
 
     return None
+
+
+def display_matches():
+    text = readline.get_line_buffer().split()[-1] if readline.get_line_buffer().split() else ""
+    matches = get_completions(text)
+
+    if len(matches) > 1:
+        sys.stdout.write("\n" + "  ".join(matches) + "\n$ " + readline.get_line_buffer())
+        sys.stdout.flush()
+
+
+def tab_handler():
+    global last_completion_text, tab_count
+
+    text = readline.get_line_buffer()
+    matches = get_completions(text.split()[-1] if text.split() else "")
+
+    if len(matches) > 1:
+        if last_completion_text == text:
+            tab_count += 1
+        else:
+            last_completion_text = text
+            tab_count = 1
+
+        if tab_count == 1:
+            sys.stdout.write("\a")
+            sys.stdout.flush()
+        else:
+            sys.stdout.write("\n" + "  ".join(matches) + "\n$ " + text)
+            sys.stdout.flush()
+            tab_count = 0
+    elif len(matches) == 1:
+        readline.insert_text(matches[0][len(text.split()[-1]) if text.split() else 0:] + " ")
+        readline.redisplay()
 
 
 readline.set_completer(completer)
