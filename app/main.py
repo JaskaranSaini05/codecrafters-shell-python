@@ -45,6 +45,24 @@ def parse_command(command):
                     current.append(command[i])
                 started = True
 
+            elif command[i:i + 2] in ("1>>", "2>>"):
+                if started:
+                    args.append("".join(current))
+                    current = []
+                    started = False
+
+                args.append(command[i:i + 2])
+                i += 2
+
+            elif command[i:i + 2] == ">>":
+                if started:
+                    args.append("".join(current))
+                    current = []
+                    started = False
+
+                args.append(">>")
+                i += 1
+
             elif command[i:i + 2] in ("1>", "2>"):
                 if started:
                     args.append("".join(current))
@@ -107,6 +125,7 @@ def main():
 
         output_file = None
         error_file = None
+        output_mode = "w"
         filtered_parts = []
         i = 0
 
@@ -114,11 +133,27 @@ def main():
             if parts[i] in (">", "1>"):
                 if i + 1 < len(parts):
                     output_file = parts[i + 1]
+                    output_mode = "w"
+                    i += 2
+                else:
+                    i += 1
+
+            elif parts[i] in (">>", "1>>"):
+                if i + 1 < len(parts):
+                    output_file = parts[i + 1]
+                    output_mode = "a"
                     i += 2
                 else:
                     i += 1
 
             elif parts[i] == "2>":
+                if i + 1 < len(parts):
+                    error_file = parts[i + 1]
+                    i += 2
+                else:
+                    i += 1
+
+            elif parts[i] == "2>>":
                 if i + 1 < len(parts):
                     error_file = parts[i + 1]
                     i += 2
@@ -142,10 +177,13 @@ def main():
 
         try:
             if output_file is not None:
-                output = open(output_file, "w")
+                output = open(output_file, output_mode)
 
             if error_file is not None:
-                error_output = open(error_file, "w")
+                error_output = open(
+                    error_file,
+                    "a" if "2>>" in command else "w"
+                )
 
         except OSError:
             if output is not None:
