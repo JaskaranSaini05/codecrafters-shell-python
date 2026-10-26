@@ -4,10 +4,7 @@ import sys
 import subprocess
 import readline
 
-
 BUILTINS = ["echo", "exit", "type", "pwd", "cd"]
-last_completion_text = None
-tab_count = 0
 
 
 def parse_command(command):
@@ -126,11 +123,13 @@ def get_completions(text):
 
         try:
             for filename in os.listdir(directory):
-                if filename.startswith(text):
-                    path = os.path.join(directory, filename)
+                if not filename.startswith(text):
+                    continue
 
-                    if os.path.isfile(path) and os.access(path, os.X_OK):
-                        matches.add(filename)
+                path = os.path.join(directory, filename)
+
+                if os.path.isfile(path) and os.access(path, os.X_OK):
+                    matches.add(filename)
         except OSError:
             continue
 
@@ -138,70 +137,21 @@ def get_completions(text):
 
 
 def completer(text, state):
-    global last_completion_text, tab_count
-
     if state == 0:
-        last_completion_text = text
-        tab_count = 0
+        completer.matches = get_completions(text)
 
-    matches = get_completions(text)
-
-    if len(matches) == 1:
-        if state == 0:
-            return matches[0] + " "
+    try:
+        return completer.matches[state]
+    except IndexError:
         return None
-
-    if len(matches) > 1:
-        if state == 0:
-            tab_count += 1
-            return matches[0]
-
-        if state < len(matches):
-            return matches[state]
-
-    return None
-
-
-def display_matches():
-    text = readline.get_line_buffer().split()[-1] if readline.get_line_buffer().split() else ""
-    matches = get_completions(text)
-
-    if len(matches) > 1:
-        sys.stdout.write("\n" + "  ".join(matches) + "\n$ " + readline.get_line_buffer())
-        sys.stdout.flush()
-
-
-def tab_handler():
-    global last_completion_text, tab_count
-
-    text = readline.get_line_buffer()
-    matches = get_completions(text.split()[-1] if text.split() else "")
-
-    if len(matches) > 1:
-        if last_completion_text == text:
-            tab_count += 1
-        else:
-            last_completion_text = text
-            tab_count = 1
-
-        if tab_count == 1:
-            sys.stdout.write("\a")
-            sys.stdout.flush()
-        else:
-            sys.stdout.write("\n" + "  ".join(matches) + "\n$ " + text)
-            sys.stdout.flush()
-            tab_count = 0
-    elif len(matches) == 1:
-        readline.insert_text(matches[0][len(text.split()[-1]) if text.split() else 0:] + " ")
-        readline.redisplay()
 
 
 readline.set_completer(completer)
 
-try:
-    readline.parse_and_bind("tab: complete")
-except Exception:
-    pass
+if hasattr(readline, "set_completion_append_character"):
+    readline.set_completion_append_character(" ")
+
+readline.parse_and_bind("tab: complete")
 
 
 def main():
@@ -253,7 +203,6 @@ def main():
 
         name = parts[0]
         args = parts[1:]
-
         output = None
         error_output = None
 
