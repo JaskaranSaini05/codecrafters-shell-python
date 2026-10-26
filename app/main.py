@@ -47,6 +47,19 @@ def parse_command(command):
                     args.append("".join(current))
                     current = []
                     started = False
+            elif char in (">",) or (
+                char == "2" and i + 1 < len(command) and command[i + 1] == ">"
+            ):
+                if started:
+                    args.append("".join(current))
+                    current = []
+                    started = False
+
+                if char == "2" and i + 1 < len(command) and command[i + 1] == ">":
+                    args.append("2>")
+                    i += 1
+                else:
+                    args.append(">")
             else:
                 current.append(char)
                 started = True
@@ -85,6 +98,7 @@ def main():
             continue
 
         output_file = None
+        error_file = None
         filtered_parts = []
         i = 0
 
@@ -92,6 +106,12 @@ def main():
             if parts[i] in (">", "1>"):
                 if i + 1 < len(parts):
                     output_file = parts[i + 1]
+                    i += 2
+                else:
+                    i += 1
+            elif parts[i] == "2>":
+                if i + 1 < len(parts):
+                    error_file = parts[i + 1]
                     i += 2
                 else:
                     i += 1
@@ -107,22 +127,32 @@ def main():
         name = parts[0]
         args = parts[1:]
 
-        if output_file is not None:
-            try:
+        output = None
+        error_output = None
+
+        try:
+            if output_file is not None:
                 output = open(output_file, "w")
-            except OSError:
-                continue
-        else:
-            output = None
+
+            if error_file is not None:
+                error_output = open(error_file, "w")
+
+        except OSError:
+            if output:
+                output.close()
+            if error_output:
+                error_output.close()
+            continue
+
+        stdout_target = output if output is not None else sys.stdout
+        stderr_target = error_output if error_output is not None else sys.stderr
 
         try:
             if name == "exit":
-                if output:
-                    output.close()
                 break
 
             elif name == "pwd":
-                print(os.getcwd(), file=output or sys.stdout)
+                print(os.getcwd(), file=stdout_target)
 
             elif name == "cd":
                 if not args:
@@ -138,37 +168,28 @@ def main():
                 except OSError:
                     print(
                         f"cd: {args[0]}: No such file or directory",
-                        file=sys.stderr
+                        file=stderr_target
                     )
 
             elif name == "echo":
-                print(" ".join(args), file=output or sys.stdout)
+                print(" ".join(args), file=stdout_target)
 
             elif name == "type":
                 if not args:
-                    print("type: not found", file=output or sys.stdout)
+                    print("type: not found", file=stdout_target)
                     continue
 
                 target = args[0]
 
                 if target in builtins:
-                    print(
-                        f"{target} is a shell builtin",
-                        file=output or sys.stdout
-                    )
+                    print(f"{target} is a shell builtin", file=stdout_target)
                 else:
                     found = find_executable(target)
 
                     if found:
-                        print(
-                            f"{target} is {found}",
-                            file=output or sys.stdout
-                        )
+                        print(f"{target} is {found}", file=stdout_target)
                     else:
-                        print(
-                            f"{target}: not found",
-                            file=output or sys.stdout
-                        )
+                        print(f"{target}: not found", file=stdout_target)
 
             else:
                 executable = find_executable(name)
@@ -178,16 +199,19 @@ def main():
                         subprocess.run(
                             [name] + args,
                             executable=executable,
-                            stdout=output
+                            stdout=output,
+                            stderr=error_output
                         )
                     except OSError:
-                        print(f"{name}: command not found", file=sys.stderr)
+                        print(f"{name}: command not found", file=stderr_target)
                 else:
-                    print(f"{name}: command not found", file=sys.stderr)
+                    print(f"{name}: command not found", file=stderr_target)
 
         finally:
             if output:
                 output.close()
+            if error_output:
+                error_output.close()
 
 
 if __name__ == "__main__":
