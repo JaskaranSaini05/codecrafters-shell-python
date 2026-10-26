@@ -100,21 +100,43 @@ def parse_command(command):
 
 def find_executable(name):
     for directory in os.environ.get("PATH", "").split(os.pathsep):
+        if not directory:
+            directory = "."
+
         path = os.path.join(directory, name)
+
         if os.path.isfile(path) and os.access(path, os.X_OK):
             return path
+
     return None
 
 
 def completer(text, state):
-    matches = [
-        command + " "
-        for command in ("echo", "exit")
-        if command.startswith(text)
-    ]
+    matches = []
+
+    for command in BUILTINS:
+        if command.startswith(text):
+            matches.append(command)
+
+    for directory in os.environ.get("PATH", "").split(os.pathsep):
+        if not directory:
+            directory = "."
+
+        try:
+            for filename in os.listdir(directory):
+                if filename.startswith(text):
+                    path = os.path.join(directory, filename)
+
+                    if os.path.isfile(path) and os.access(path, os.X_OK):
+                        if filename not in matches:
+                            matches.append(filename)
+        except OSError:
+            continue
+
+    matches = sorted(set(matches))
 
     if state < len(matches):
-        return matches[state]
+        return matches[state] + " "
 
     return None
 
