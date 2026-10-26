@@ -140,17 +140,20 @@ def completer(text, state):
     if state == 0:
         completer.matches = get_completions(text)
 
+    matches = completer.matches
+
+    if len(matches) == 1:
+        if state == 0:
+            return matches[0] + " "
+        return None
+
     try:
-        return completer.matches[state]
+        return matches[state]
     except IndexError:
         return None
 
 
 readline.set_completer(completer)
-
-if hasattr(readline, "set_completion_append_character"):
-    readline.set_completion_append_character(" ")
-
 readline.parse_and_bind("tab: complete")
 
 
