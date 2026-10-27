@@ -181,29 +181,30 @@ def completer(text, state):
 
         completer.matches = matches
 
-        if len(matches) == 0:
+        if not matches:
+            completer.tab_pressed = False
             sys.stdout.write("\x07")
             sys.stdout.flush()
         elif len(matches) > 1:
             if getattr(completer, "tab_pressed", False):
-                display_matches = "  ".join(matches)
-                sys.stdout.write("\n" + display_matches + "\n")
+                completer.tab_pressed = False
+                sys.stdout.write("\n")
+                sys.stdout.write("  ".join(matches))
+                sys.stdout.write("\n$ " + line)
                 sys.stdout.flush()
                 completer.matches = []
-                readline.redisplay()
             else:
+                completer.tab_pressed = True
                 sys.stdout.write("\x07")
                 sys.stdout.flush()
-                completer.tab_pressed = True
                 completer.matches = []
         else:
             completer.tab_pressed = False
             match = matches[0]
-            if last_space != -1 or "/" in text:
-                if not match.endswith("/"):
-                    match += " "
-            else:
+
+            if not match.endswith("/"):
                 match += " "
+
             completer.matches = [match]
 
     try:
@@ -212,6 +213,7 @@ def completer(text, state):
         return None
 
 
+completer.tab_pressed = False
 readline.set_completer(completer)
 readline.parse_and_bind("tab: complete")
 
