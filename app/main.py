@@ -144,23 +144,24 @@ def get_filename_completions(text):
         search_directory = "."
 
     try:
-        entries = [
+        entries = sorted(
             name for name in os.listdir(search_directory)
             if name.startswith(prefix)
-        ]
+        )
     except OSError:
         return []
 
-    if len(entries) != 1:
-        return []
+    matches = []
 
-    entry = entries[0]
-    full_path = os.path.join(search_directory, entry)
+    for entry in entries:
+        full_path = os.path.join(search_directory, entry)
 
-    if os.path.isdir(full_path):
-        return [entry + "/"]
+        if os.path.isdir(full_path):
+            matches.append(entry + "/")
+        else:
+            matches.append(entry)
 
-    return [entry + " "]
+    return matches
 
 
 def completer(text, state):
@@ -178,18 +179,36 @@ def completer(text, state):
         else:
             matches = get_completions(text)
 
-            if len(matches) == 1:
-                matches = [matches[0] + " "]
-
         completer.matches = matches
 
-        if not completer.matches:
+        if len(matches) == 0:
             sys.stdout.write("\x07")
             sys.stdout.flush()
+        elif len(matches) > 1:
+            if getattr(completer, "tab_pressed", False):
+                display_matches = "  ".join(matches)
+                sys.stdout.write("\n" + display_matches + "\n")
+                sys.stdout.flush()
+                completer.matches = []
+                readline.redisplay()
+            else:
+                sys.stdout.write("\x07")
+                sys.stdout.flush()
+                completer.tab_pressed = True
+                completer.matches = []
+        else:
+            completer.tab_pressed = False
+            match = matches[0]
+            if last_space != -1 or "/" in text:
+                if not match.endswith("/"):
+                    match += " "
+            else:
+                match += " "
+            completer.matches = [match]
 
     try:
         return completer.matches[state]
-    except IndexError:
+    except (IndexError, AttributeError):
         return None
 
 
