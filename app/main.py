@@ -138,9 +138,8 @@ def get_completions(text):
 def get_filename_completions(text):
     if "/" in text:
         directory, prefix = text.rsplit("/", 1)
-        directory = directory or "/"
-        search_directory = directory
-        display_prefix = directory + "/"
+        search_directory = directory if directory else "/"
+        display_prefix = directory + "/" if directory else "/"
     else:
         prefix = text
         search_directory = "."
@@ -171,13 +170,6 @@ def completer(text, state):
         if last_space != -1:
             prefix = before_cursor[last_space + 1:]
             matches = get_filename_completions(prefix)
-
-            if len(matches) == 1:
-                completer.matches = [matches[0] + " "]
-            else:
-                completer.matches = []
-        elif "/" in text:
-            matches = get_filename_completions(text)
 
             if len(matches) == 1:
                 completer.matches = [matches[0] + " "]
