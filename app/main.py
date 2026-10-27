@@ -180,29 +180,48 @@ def completer(text, state):
             matches = get_completions(text)
 
         completer.matches = matches
+        completer.original_line = line
 
         if not matches:
             completer.tab_pressed = False
             sys.stdout.write("\x07")
             sys.stdout.flush()
+
         elif len(matches) > 1:
-            if getattr(completer, "tab_pressed", False):
+            if completer.tab_pressed:
                 completer.tab_pressed = False
                 sys.stdout.write("\n")
                 sys.stdout.write("  ".join(matches))
-                sys.stdout.write("\n$ " + line)
+                sys.stdout.write("\n")
                 sys.stdout.flush()
                 completer.matches = []
+                completer.show_matches = True
             else:
                 completer.tab_pressed = True
                 sys.stdout.write("\x07")
                 sys.stdout.flush()
                 completer.matches = []
+                completer.show_matches = False
+
         else:
             completer.tab_pressed = False
+            completer.show_matches = False
             match = matches[0]
 
-            if not match.endswith("/"):
+            if "/" in prefix if last_space != -1 else "/" in text:
+                typed_prefix = prefix if last_space != -1 else text
+                if "/" in typed_prefix:
+                    typed_directory, typed_name = typed_prefix.rsplit("/", 1)
+                    if match.startswith(typed_name):
+                        match = match[len(typed_name):]
+                else:
+                    match = match[len(typed_prefix):]
+            elif last_space != -1:
+                match = match[len(prefix):]
+            else:
+                match = match[len(text):]
+
+            if not matches[0].endswith("/"):
                 match += " "
 
             completer.matches = [match]
@@ -214,6 +233,7 @@ def completer(text, state):
 
 
 completer.tab_pressed = False
+completer.show_matches = False
 readline.set_completer(completer)
 readline.parse_and_bind("tab: complete")
 
