@@ -172,16 +172,20 @@ def completer(text, state):
 
         if last_space != -1:
             prefix = before_cursor[last_space + 1:]
-            completer.matches = get_filename_completions(prefix)
+            matches = get_filename_completions(prefix)
         elif "/" in text:
-            completer.matches = get_filename_completions(text)
+            matches = get_filename_completions(text)
         else:
             matches = get_completions(text)
 
             if len(matches) == 1:
-                completer.matches = [matches[0] + " "]
-            else:
-                completer.matches = matches
+                matches = [matches[0] + " "]
+
+        completer.matches = matches
+
+        if not completer.matches:
+            sys.stdout.write("\x07")
+            sys.stdout.flush()
 
     try:
         return completer.matches[state]
