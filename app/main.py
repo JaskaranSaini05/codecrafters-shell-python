@@ -139,9 +139,11 @@ def get_filename_completions(text):
     if "/" in text:
         directory, prefix = text.rsplit("/", 1)
         search_directory = directory if directory else "/"
+        base = directory + "/" if directory else "/"
     else:
         prefix = text
         search_directory = "."
+        base = ""
 
     try:
         entries = sorted(
@@ -155,11 +157,12 @@ def get_filename_completions(text):
 
     for entry in entries:
         full_path = os.path.join(search_directory, entry)
+        candidate = base + entry
 
         if os.path.isdir(full_path):
-            matches.append(entry + "/")
+            matches.append(candidate + "/")
         else:
-            matches.append(entry)
+            matches.append(candidate)
 
     return matches
 
@@ -169,62 +172,30 @@ def completer(text, state):
         line = readline.get_line_buffer()
         end_index = readline.get_endidx()
         before_cursor = line[:end_index]
-        last_space = before_cursor.rfind(" ")
 
-        if last_space != -1:
+        if any(char.isspace() for char in before_cursor):
+            last_space = max(
+                before_cursor.rfind(" "),
+                before_cursor.rfind("\t"),
+                before_cursor.rfind("\n")
+            )
             prefix = before_cursor[last_space + 1:]
             matches = get_filename_completions(prefix)
+            completer.is_command = False
         elif "/" in text:
             matches = get_filename_completions(text)
+            completer.is_command = False
         else:
             matches = get_completions(text)
+            completer.is_command = True
+
+        if completer.is_command and len(matches) == 1:
+            matches = [matches[0] + " "]
+        elif not completer.is_command and len(matches) == 1:
+            if not matches[0].endswith("/"):
+                matches = [matches[0] + " "]
 
         completer.matches = matches
-        completer.original_line = line
-
-        if not matches:
-            completer.tab_pressed = False
-            sys.stdout.write("\x07")
-            sys.stdout.flush()
-
-        elif len(matches) > 1:
-            if completer.tab_pressed:
-                completer.tab_pressed = False
-                sys.stdout.write("\n")
-                sys.stdout.write("  ".join(matches))
-                sys.stdout.write("\n")
-                sys.stdout.flush()
-                completer.matches = []
-                completer.show_matches = True
-            else:
-                completer.tab_pressed = True
-                sys.stdout.write("\x07")
-                sys.stdout.flush()
-                completer.matches = []
-                completer.show_matches = False
-
-        else:
-            completer.tab_pressed = False
-            completer.show_matches = False
-            match = matches[0]
-
-            if "/" in prefix if last_space != -1 else "/" in text:
-                typed_prefix = prefix if last_space != -1 else text
-                if "/" in typed_prefix:
-                    typed_directory, typed_name = typed_prefix.rsplit("/", 1)
-                    if match.startswith(typed_name):
-                        match = match[len(typed_name):]
-                else:
-                    match = match[len(typed_prefix):]
-            elif last_space != -1:
-                match = match[len(prefix):]
-            else:
-                match = match[len(text):]
-
-            if not matches[0].endswith("/"):
-                match += " "
-
-            completer.matches = [match]
 
     try:
         return completer.matches[state]
@@ -232,8 +203,7 @@ def completer(text, state):
         return None
 
 
-completer.tab_pressed = False
-completer.show_matches = False
+readline.set_completer_delims(" \t\n")
 readline.set_completer(completer)
 readline.parse_and_bind("tab: complete")
 
