@@ -139,11 +139,9 @@ def get_filename_completions(text):
     if "/" in text:
         directory, prefix = text.rsplit("/", 1)
         search_directory = directory if directory else "/"
-        display_prefix = directory + "/" if directory else "/"
     else:
         prefix = text
         search_directory = "."
-        display_prefix = ""
 
     try:
         matches = [
@@ -155,7 +153,7 @@ def get_filename_completions(text):
         return []
 
     if len(matches) == 1:
-        return [display_prefix + matches[0]]
+        return matches
 
     return []
 
