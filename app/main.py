@@ -139,31 +139,28 @@ def get_filename_completions(text):
     if "/" in text:
         directory, prefix = text.rsplit("/", 1)
         search_directory = directory if directory else "/"
-        display_prefix = text[:len(text) - len(prefix)]
     else:
         prefix = text
         search_directory = "."
-        display_prefix = ""
 
     try:
-        matches = [
-            filename
-            for filename in os.listdir(search_directory)
-            if filename.startswith(prefix)
+        entries = [
+            name for name in os.listdir(search_directory)
+            if name.startswith(prefix)
         ]
     except OSError:
         return []
 
-    if len(matches) != 1:
+    if len(entries) != 1:
         return []
 
-    filename = matches[0]
-    full_path = os.path.join(search_directory, filename)
+    entry = entries[0]
+    full_path = os.path.join(search_directory, entry)
 
     if os.path.isdir(full_path):
-        return [display_prefix + filename + "/"]
+        return [entry + "/"]
 
-    return [display_prefix + filename + " "]
+    return [entry + " "]
 
 
 def completer(text, state):
@@ -175,8 +172,9 @@ def completer(text, state):
 
         if last_space != -1:
             prefix = before_cursor[last_space + 1:]
-            matches = get_filename_completions(prefix)
-            completer.matches = matches
+            completer.matches = get_filename_completions(prefix)
+        elif "/" in text:
+            completer.matches = get_filename_completions(text)
         else:
             matches = get_completions(text)
 
