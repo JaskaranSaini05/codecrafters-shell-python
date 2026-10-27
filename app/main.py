@@ -1,4 +1,3 @@
-
 import os
 import sys
 import subprocess
@@ -136,19 +135,39 @@ def get_completions(text):
     return sorted(matches)
 
 
+def get_filename_completions(text):
+    try:
+        return sorted(
+            filename
+            for filename in os.listdir(".")
+            if filename.startswith(text)
+        )
+    except OSError:
+        return []
+
+
 def completer(text, state):
     if state == 0:
-        completer.matches = get_completions(text)
+        line = readline.get_line_buffer()
+        before_cursor = line[:readline.get_endidx()]
+        last_space = before_cursor.rfind(" ")
 
-    matches = completer.matches
+        if last_space != -1:
+            prefix = before_cursor[last_space + 1:]
+            matches = get_filename_completions(prefix)
 
-    if len(matches) == 1:
-        if state == 0:
-            return matches[0] + " "
-        return None
+            if len(matches) == 1:
+                completer.matches = [matches[0] + " "]
+            else:
+                completer.matches = []
+        else:
+            completer.matches = get_completions(text)
+
+            if len(completer.matches) == 1:
+                completer.matches = [completer.matches[0] + " "]
 
     try:
-        return matches[state]
+        return completer.matches[state]
     except IndexError:
         return None
 
