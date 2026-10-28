@@ -32,9 +32,10 @@ def parse_command(command):
                     current.append(command[i])
                 else:
                     current.append(char)
+                started = True
             else:
                 current.append(char)
-            started = True
+                started = True
 
         else:
             if char in ("'", '"'):
@@ -119,10 +120,9 @@ def get_completions(text):
 
         try:
             for filename in os.listdir(directory):
-                if filename.startswith(text):
-                    path = os.path.join(directory, filename)
-                    if os.path.isfile(path) and os.access(path, os.X_OK):
-                        matches.add(filename)
+                path = os.path.join(directory, filename)
+                if filename.startswith(text) and os.path.isfile(path) and os.access(path, os.X_OK):
+                    matches.add(filename)
         except OSError:
             pass
 
@@ -182,15 +182,12 @@ def completer(text, state):
         end_index = readline.get_endidx()
         before_cursor = line[:end_index]
 
-        command_position = not before_cursor.strip() or (
-            len(before_cursor.split()) == 1 and not before_cursor[-1].isspace()
-        )
-
-        if before_cursor and before_cursor[-1].isspace():
+        if not before_cursor or before_cursor[-1].isspace():
             prefix = ""
-            command_position = not before_cursor.strip()
         else:
-            prefix = before_cursor.rsplit(None, 1)[-1] if before_cursor.strip() else ""
+            prefix = before_cursor.rsplit(None, 1)[-1]
+
+        command_position = len(before_cursor.split()) <= 1
 
         if command_position:
             matches = get_completions(prefix)
@@ -199,9 +196,11 @@ def completer(text, state):
 
         completer.matches = []
         completer.bell = False
+        completer.display_matches = False
 
         if not matches:
             completer.bell = True
+
         elif len(matches) == 1:
             match = matches[0]
 
@@ -212,25 +211,27 @@ def completer(text, state):
                 match += " "
 
             completer.matches = [match]
+
         else:
             common = longest_common_prefix(matches)
 
             if len(common) > len(prefix):
                 completer.matches = [common]
             else:
-                completer.matches = matches
+                completer.matches = []
+                completer.display_matches = True
                 completer.bell = True
+                completer.all_matches = matches
 
         if completer.bell:
             sys.stdout.write("\a")
             sys.stdout.flush()
 
-        if len(completer.matches) > 1:
-            sys.stdout.write("\n")
-            sys.stdout.write("  ".join(completer.matches))
-            sys.stdout.write("\n")
-            sys.stdout.flush()
-            readline.redisplay()
+        if completer.display_matches:
+            readline.set_completion_display_matches_hook(
+                lambda substitution, matches, longest:
+                sys.stdout.write("\n" + "  ".join(completer.all_matches) + "\n")
+            )
 
     try:
         return completer.matches[state]
@@ -304,6 +305,7 @@ def main():
 
             if error_file is not None:
                 error_output = open(error_file, error_mode)
+
         except OSError:
             if output is not None:
                 output.close()
