@@ -1,4 +1,3 @@
-
 import os
 import sys
 import subprocess
@@ -182,51 +181,56 @@ def completer(text, state):
         line = readline.get_line_buffer()
         end_index = readline.get_endidx()
         before_cursor = line[:end_index]
-        last_word = before_cursor.rsplit(None, 1)[-1] if before_cursor.strip() else ""
+
+        command_position = not before_cursor.strip() or (
+            len(before_cursor.split()) == 1 and not before_cursor[-1].isspace()
+        )
 
         if before_cursor and before_cursor[-1].isspace():
             prefix = ""
             command_position = not before_cursor.strip()
         else:
-            prefix = last_word
-            command_position = len(before_cursor.split()) <= 1
+            prefix = before_cursor.rsplit(None, 1)[-1] if before_cursor.strip() else ""
 
         if command_position:
             matches = get_completions(prefix)
-            completer.command_position = True
         else:
             matches = get_filename_completions(prefix)
-            completer.command_position = False
 
-        completer.original_prefix = prefix
-        completer.matches = matches
-        completer.match_index = 0
+        completer.matches = []
         completer.bell = False
 
-        if len(matches) > 1:
-            common = longest_common_prefix(matches)
+        if not matches:
+            completer.bell = True
+        elif len(matches) == 1:
+            match = matches[0]
 
-            if len(common) > len(prefix):
-                completer.matches = [common]
-                completer.match_index = 0
-            else:
-                completer.bell = True
-
-        if len(completer.matches) == 1:
-            match = completer.matches[0]
-
-            if completer.command_position:
+            if command_position:
                 if match in BUILTINS or find_executable(match):
-                    if not match.endswith(" "):
-                        match += " "
+                    match += " "
             elif not match.endswith("/"):
                 match += " "
 
             completer.matches = [match]
+        else:
+            common = longest_common_prefix(matches)
+
+            if len(common) > len(prefix):
+                completer.matches = [common]
+            else:
+                completer.matches = matches
+                completer.bell = True
 
         if completer.bell:
             sys.stdout.write("\a")
             sys.stdout.flush()
+
+        if len(completer.matches) > 1:
+            sys.stdout.write("\n")
+            sys.stdout.write("  ".join(completer.matches))
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+            readline.redisplay()
 
     try:
         return completer.matches[state]
@@ -325,7 +329,6 @@ def main():
 
                 if directory == "~":
                     directory = os.environ.get("HOME", "")
-
                 elif directory.startswith("~/"):
                     directory = os.path.join(
                         os.environ.get("HOME", ""),
@@ -366,8 +369,7 @@ def main():
                 if executable:
                     try:
                         subprocess.run(
-                            [name] + args,
-                            executable=executable,
+                            [executable] + args,
                             stdout=output,
                             stderr=error_output
                         )
