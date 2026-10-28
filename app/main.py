@@ -1,3 +1,4 @@
+
 import os
 import sys
 import subprocess
@@ -27,7 +28,7 @@ def parse_command(command):
             if char == '"':
                 quote = None
             elif char == "\\":
-                if i + 1 < len(command) and command[i + 1] in ['"', '\\']:
+                if i + 1 < len(command) and command[i + 1] in ['"', '\\', '$', '`']:
                     i += 1
                     current.append(command[i])
                 else:
@@ -98,9 +99,7 @@ def parse_command(command):
 
 def find_executable(name):
     for directory in os.environ.get("PATH", "").split(os.pathsep):
-        if not directory:
-            directory = "."
-
+        directory = directory or "."
         path = os.path.join(directory, name)
 
         if os.path.isfile(path) and os.access(path, os.X_OK):
@@ -117,20 +116,16 @@ def get_completions(text):
             matches.add(command)
 
     for directory in os.environ.get("PATH", "").split(os.pathsep):
-        if not directory:
-            directory = "."
+        directory = directory or "."
 
         try:
             for filename in os.listdir(directory):
-                if not filename.startswith(text):
-                    continue
-
-                path = os.path.join(directory, filename)
-
-                if os.path.isfile(path) and os.access(path, os.X_OK):
-                    matches.add(filename)
+                if filename.startswith(text):
+                    path = os.path.join(directory, filename)
+                    if os.path.isfile(path) and os.access(path, os.X_OK):
+                        matches.add(filename)
         except OSError:
-            continue
+            pass
 
     return sorted(matches)
 
@@ -138,7 +133,7 @@ def get_completions(text):
 def get_filename_completions(text):
     if "/" in text:
         directory, prefix = text.rsplit("/", 1)
-        search_directory = directory if directory else "/"
+        search_directory = directory or "/"
         base = directory + "/" if directory else "/"
     else:
         prefix = text
@@ -160,11 +155,26 @@ def get_filename_completions(text):
         candidate = base + entry
 
         if os.path.isdir(full_path):
-            matches.append(candidate + "/")
-        else:
-            matches.append(candidate)
+            candidate += "/"
+
+        matches.append(candidate)
 
     return matches
+
+
+def longest_common_prefix(strings):
+    if not strings:
+        return ""
+
+    prefix = strings[0]
+
+    for value in strings[1:]:
+        while not value.startswith(prefix):
+            prefix = prefix[:-1]
+            if not prefix:
+                return ""
+
+    return prefix
 
 
 def completer(text, state):
@@ -172,30 +182,51 @@ def completer(text, state):
         line = readline.get_line_buffer()
         end_index = readline.get_endidx()
         before_cursor = line[:end_index]
+        last_word = before_cursor.rsplit(None, 1)[-1] if before_cursor.strip() else ""
 
-        if any(char.isspace() for char in before_cursor):
-            last_space = max(
-                before_cursor.rfind(" "),
-                before_cursor.rfind("\t"),
-                before_cursor.rfind("\n")
-            )
-            prefix = before_cursor[last_space + 1:]
-            matches = get_filename_completions(prefix)
-            completer.is_command = False
-        elif "/" in text:
-            matches = get_filename_completions(text)
-            completer.is_command = False
+        if before_cursor and before_cursor[-1].isspace():
+            prefix = ""
+            command_position = not before_cursor.strip()
         else:
-            matches = get_completions(text)
-            completer.is_command = True
+            prefix = last_word
+            command_position = len(before_cursor.split()) <= 1
 
-        if completer.is_command and len(matches) == 1:
-            matches = [matches[0] + " "]
-        elif not completer.is_command and len(matches) == 1:
-            if not matches[0].endswith("/"):
-                matches = [matches[0] + " "]
+        if command_position:
+            matches = get_completions(prefix)
+            completer.command_position = True
+        else:
+            matches = get_filename_completions(prefix)
+            completer.command_position = False
 
+        completer.original_prefix = prefix
         completer.matches = matches
+        completer.match_index = 0
+        completer.bell = False
+
+        if len(matches) > 1:
+            common = longest_common_prefix(matches)
+
+            if len(common) > len(prefix):
+                completer.matches = [common]
+                completer.match_index = 0
+            else:
+                completer.bell = True
+
+        if len(completer.matches) == 1:
+            match = completer.matches[0]
+
+            if completer.command_position:
+                if match in BUILTINS or find_executable(match):
+                    if not match.endswith(" "):
+                        match += " "
+            elif not match.endswith("/"):
+                match += " "
+
+            completer.matches = [match]
+
+        if completer.bell:
+            sys.stdout.write("\a")
+            sys.stdout.flush()
 
     try:
         return completer.matches[state]
@@ -214,6 +245,9 @@ def main():
             command = input("$ ")
         except EOFError:
             break
+        except KeyboardInterrupt:
+            print()
+            continue
 
         parts = parse_command(command)
 
@@ -266,7 +300,6 @@ def main():
 
             if error_file is not None:
                 error_output = open(error_file, error_mode)
-
         except OSError:
             if output is not None:
                 output.close()
@@ -292,6 +325,12 @@ def main():
 
                 if directory == "~":
                     directory = os.environ.get("HOME", "")
+
+                elif directory.startswith("~/"):
+                    directory = os.path.join(
+                        os.environ.get("HOME", ""),
+                        directory[2:]
+                    )
 
                 try:
                     os.chdir(directory)
