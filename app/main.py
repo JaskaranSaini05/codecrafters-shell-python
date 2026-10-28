@@ -1,3 +1,4 @@
+
 import os
 import sys
 import subprocess
@@ -41,13 +42,11 @@ def parse_command(command):
             if char in ("'", '"'):
                 quote = char
                 started = True
-
             elif char == "\\":
                 if i + 1 < len(command):
                     i += 1
                     current.append(command[i])
                 started = True
-
             elif command[i:i + 3] in ("1>>", "2>>"):
                 if started:
                     args.append("".join(current))
@@ -55,7 +54,6 @@ def parse_command(command):
                     started = False
                 args.append(command[i:i + 3])
                 i += 2
-
             elif command[i:i + 2] == ">>":
                 if started:
                     args.append("".join(current))
@@ -63,7 +61,6 @@ def parse_command(command):
                     started = False
                 args.append(">>")
                 i += 1
-
             elif command[i:i + 2] in ("1>", "2>"):
                 if started:
                     args.append("".join(current))
@@ -71,20 +68,17 @@ def parse_command(command):
                     started = False
                 args.append(command[i:i + 2])
                 i += 1
-
             elif char == ">":
                 if started:
                     args.append("".join(current))
                     current = []
                     started = False
                 args.append(">")
-
             elif char.isspace():
                 if started:
                     args.append("".join(current))
                     current = []
                     started = False
-
             else:
                 current.append(char)
                 started = True
@@ -101,10 +95,8 @@ def find_executable(name):
     for directory in os.environ.get("PATH", "").split(os.pathsep):
         directory = directory or "."
         path = os.path.join(directory, name)
-
         if os.path.isfile(path) and os.access(path, os.X_OK):
             return path
-
     return None
 
 
@@ -117,7 +109,6 @@ def get_completions(text):
 
     for directory in os.environ.get("PATH", "").split(os.pathsep):
         directory = directory or "."
-
         try:
             for filename in os.listdir(directory):
                 path = os.path.join(directory, filename)
@@ -152,10 +143,8 @@ def get_filename_completions(text):
     for entry in entries:
         full_path = os.path.join(search_directory, entry)
         candidate = base + entry
-
         if os.path.isdir(full_path):
             candidate += "/"
-
         matches.append(candidate)
 
     return matches
@@ -176,18 +165,29 @@ def longest_common_prefix(strings):
     return prefix
 
 
+def display_matches(substitution, matches, longest_match_length):
+    values = getattr(completer, "display_matches", [])
+    if values:
+        sys.stdout.write("\n")
+        sys.stdout.write("  ".join(values))
+        sys.stdout.write("\n")
+
+
 def completer(text, state):
     if state == 0:
         line = readline.get_line_buffer()
         end_index = readline.get_endidx()
         before_cursor = line[:end_index]
 
-        if not before_cursor or before_cursor[-1].isspace():
-            prefix = ""
-        else:
-            prefix = before_cursor.rsplit(None, 1)[-1]
+        command_position = len(before_cursor.split()) == 0 or (
+            len(before_cursor.split()) == 1 and not before_cursor.endswith((" ", "\t"))
+        )
 
-        command_position = len(before_cursor.split()) <= 1
+        if before_cursor.endswith((" ", "\t")):
+            prefix = ""
+            command_position = len(before_cursor.split()) == 0
+        else:
+            prefix = before_cursor.rsplit(None, 1)[-1] if before_cursor.strip() else ""
 
         if command_position:
             matches = get_completions(prefix)
@@ -195,11 +195,11 @@ def completer(text, state):
             matches = get_filename_completions(prefix)
 
         completer.matches = []
-        completer.bell = False
-        completer.display_matches = False
+        completer.display_matches = []
 
         if not matches:
-            completer.bell = True
+            sys.stdout.write("\a")
+            sys.stdout.flush()
 
         elif len(matches) == 1:
             match = matches[0]
@@ -218,20 +218,9 @@ def completer(text, state):
             if len(common) > len(prefix):
                 completer.matches = [common]
             else:
-                completer.matches = []
-                completer.display_matches = True
-                completer.bell = True
-                completer.all_matches = matches
-
-        if completer.bell:
-            sys.stdout.write("\a")
-            sys.stdout.flush()
-
-        if completer.display_matches:
-            readline.set_completion_display_matches_hook(
-                lambda substitution, matches, longest:
-                sys.stdout.write("\n" + "  ".join(completer.all_matches) + "\n")
-            )
+                completer.display_matches = matches
+                sys.stdout.write("\a")
+                sys.stdout.flush()
 
     try:
         return completer.matches[state]
@@ -241,6 +230,7 @@ def completer(text, state):
 
 readline.set_completer_delims(" \t\n")
 readline.set_completer(completer)
+readline.set_completion_display_matches_hook(display_matches)
 readline.parse_and_bind("tab: complete")
 
 
@@ -276,7 +266,6 @@ def main():
                     i += 2
                 else:
                     i += 1
-
             elif operator in ("2>", "2>>"):
                 if i + 1 < len(parts):
                     error_file = parts[i + 1]
@@ -284,7 +273,6 @@ def main():
                     i += 2
                 else:
                     i += 1
-
             else:
                 filtered_parts.append(parts[i])
                 i += 1
@@ -302,10 +290,8 @@ def main():
         try:
             if output_file is not None:
                 output = open(output_file, output_mode)
-
             if error_file is not None:
                 error_output = open(error_file, error_mode)
-
         except OSError:
             if output is not None:
                 output.close()
@@ -332,18 +318,12 @@ def main():
                 if directory == "~":
                     directory = os.environ.get("HOME", "")
                 elif directory.startswith("~/"):
-                    directory = os.path.join(
-                        os.environ.get("HOME", ""),
-                        directory[2:]
-                    )
+                    directory = os.path.join(os.environ.get("HOME", ""), directory[2:])
 
                 try:
                     os.chdir(directory)
                 except OSError:
-                    print(
-                        f"cd: {args[0]}: No such file or directory",
-                        file=stderr_target
-                    )
+                    print(f"cd: {args[0]}: No such file or directory", file=stderr_target)
 
             elif name == "echo":
                 print(" ".join(args), file=stdout_target)
@@ -359,7 +339,6 @@ def main():
                     print(f"{target} is a shell builtin", file=stdout_target)
                 else:
                     found = find_executable(target)
-
                     if found:
                         print(f"{target} is {found}", file=stdout_target)
                     else:
@@ -383,7 +362,6 @@ def main():
         finally:
             if output is not None:
                 output.close()
-
             if error_output is not None:
                 error_output.close()
 
