@@ -1,4 +1,3 @@
-
 import os
 import sys
 import subprocess
@@ -150,77 +149,36 @@ def get_filename_completions(text):
     return matches
 
 
-def longest_common_prefix(strings):
-    if not strings:
-        return ""
-
-    prefix = strings[0]
-
-    for value in strings[1:]:
-        while not value.startswith(prefix):
-            prefix = prefix[:-1]
-            if not prefix:
-                return ""
-
-    return prefix
-
-
 def display_matches(substitution, matches, longest_match_length):
-    values = getattr(completer, "display_matches", [])
-    if values:
-        sys.stdout.write("\n")
-        sys.stdout.write("  ".join(values))
-        sys.stdout.write("\n")
+    sys.stdout.write("\n")
+    sys.stdout.write("  ".join(sorted(matches)))
+    sys.stdout.write("\n")
+    sys.stdout.write("$ " + readline.get_line_buffer())
+    sys.stdout.flush()
 
 
 def completer(text, state):
     if state == 0:
         line = readline.get_line_buffer()
-        end_index = readline.get_endidx()
-        before_cursor = line[:end_index]
-
-        command_position = len(before_cursor.split()) == 0 or (
-            len(before_cursor.split()) == 1 and not before_cursor.endswith((" ", "\t"))
-        )
-
-        if before_cursor.endswith((" ", "\t")):
-            prefix = ""
-            command_position = len(before_cursor.split()) == 0
-        else:
-            prefix = before_cursor.rsplit(None, 1)[-1] if before_cursor.strip() else ""
+        begin_index = readline.get_begidx()
+        command_position = line[:begin_index].strip() == ""
 
         if command_position:
-            matches = get_completions(prefix)
+            matches = get_completions(text)
         else:
-            matches = get_filename_completions(prefix)
-
-        completer.matches = []
-        completer.display_matches = []
+            matches = get_filename_completions(text)
 
         if not matches:
             sys.stdout.write("\a")
             sys.stdout.flush()
-
+            completer.matches = []
         elif len(matches) == 1:
             match = matches[0]
-
-            if command_position:
-                if match in BUILTINS or find_executable(match):
-                    match += " "
-            elif not match.endswith("/"):
+            if not match.endswith("/"):
                 match += " "
-
             completer.matches = [match]
-
         else:
-            common = longest_common_prefix(matches)
-
-            if len(common) > len(prefix):
-                completer.matches = [common]
-            else:
-                completer.display_matches = matches
-                sys.stdout.write("\a")
-                sys.stdout.flush()
+            completer.matches = matches
 
     try:
         return completer.matches[state]
