@@ -1,3 +1,4 @@
+
 import os
 import sys
 import subprocess
@@ -22,7 +23,6 @@ def parse_command(command):
             else:
                 current.append(char)
             started = True
-
         elif quote == '"':
             if char == '"':
                 quote = None
@@ -36,7 +36,6 @@ def parse_command(command):
             else:
                 current.append(char)
                 started = True
-
         else:
             if char in ("'", '"'):
                 quote = char
@@ -142,48 +141,92 @@ def get_filename_completions(text):
     for entry in entries:
         full_path = os.path.join(search_directory, entry)
         candidate = base + entry
+
         if os.path.isdir(full_path):
             candidate += "/"
+
         matches.append(candidate)
 
     return matches
 
 
-def display_matches(substitution, matches, longest_match_length):
-    sys.stdout.write("\n")
-    sys.stdout.write("  ".join(sorted(matches)))
-    sys.stdout.write("\n")
-    sys.stdout.write("$ " + readline.get_line_buffer())
-    sys.stdout.flush()
+def longest_common_prefix(strings):
+    if not strings:
+        return ""
+
+    prefix = strings[0]
+
+    for value in strings[1:]:
+        while not value.startswith(prefix):
+            prefix = prefix[:-1]
+            if not prefix:
+                return ""
+
+    return prefix
 
 
 def completer(text, state):
     if state == 0:
         line = readline.get_line_buffer()
-        begin_index = readline.get_begidx()
-        command_position = line[:begin_index].strip() == ""
+        end_index = readline.get_endidx()
+        before_cursor = line[:end_index]
+
+        if before_cursor.endswith((" ", "\t")):
+            prefix = ""
+        else:
+            prefix = before_cursor.rsplit(None, 1)[-1] if before_cursor.strip() else ""
+
+        command_position = len(before_cursor.split()) == 0 or (
+            len(before_cursor.split()) == 1 and not before_cursor.endswith((" ", "\t"))
+        )
 
         if command_position:
-            matches = get_completions(text)
+            matches = get_completions(prefix)
         else:
-            matches = get_filename_completions(text)
+            matches = get_filename_completions(prefix)
+
+        completer.matches = []
+        completer.display_matches = []
+        completer.bell = False
 
         if not matches:
-            sys.stdout.write("\a")
-            sys.stdout.flush()
-            completer.matches = []
+            completer.bell = True
         elif len(matches) == 1:
             match = matches[0]
-            if not match.endswith("/"):
+
+            if command_position:
+                if match in BUILTINS or find_executable(match):
+                    match += " "
+            elif not match.endswith("/"):
                 match += " "
+
             completer.matches = [match]
         else:
-            completer.matches = matches
+            common = longest_common_prefix(matches)
+
+            if len(common) > len(prefix):
+                completer.matches = [common]
+            else:
+                completer.display_matches = matches
+                completer.matches = matches
+                completer.bell = True
+
+        if completer.bell:
+            sys.stdout.write("\a")
+            sys.stdout.flush()
 
     try:
         return completer.matches[state]
     except (IndexError, AttributeError):
         return None
+
+
+def display_matches(substitution, matches, longest_match_length):
+    values = getattr(completer, "display_matches", [])
+    if values:
+        sys.stdout.write("\n")
+        sys.stdout.write("  ".join(values))
+        sys.stdout.write("\n")
 
 
 readline.set_completer_delims(" \t\n")
@@ -263,10 +306,8 @@ def main():
         try:
             if name == "exit":
                 break
-
             elif name == "pwd":
                 print(os.getcwd(), file=stdout_target)
-
             elif name == "cd":
                 if not args:
                     continue
@@ -282,10 +323,8 @@ def main():
                     os.chdir(directory)
                 except OSError:
                     print(f"cd: {args[0]}: No such file or directory", file=stderr_target)
-
             elif name == "echo":
                 print(" ".join(args), file=stdout_target)
-
             elif name == "type":
                 if not args:
                     print("type: not found", file=stdout_target)
@@ -301,7 +340,6 @@ def main():
                         print(f"{target} is {found}", file=stdout_target)
                     else:
                         print(f"{target}: not found", file=stdout_target)
-
             else:
                 executable = find_executable(name)
 
@@ -316,7 +354,6 @@ def main():
                         print(f"{name}: command not found", file=stderr_target)
                 else:
                     print(f"{name}: command not found", file=stderr_target)
-
         finally:
             if output is not None:
                 output.close()
