@@ -187,7 +187,6 @@ def completer(text, state):
         line = readline.get_line_buffer()
         end_index = readline.get_endidx()
         before_cursor = line[:end_index]
-
         words = before_cursor.split()
         ends_with_space = bool(before_cursor) and before_cursor[-1].isspace()
 
@@ -195,20 +194,22 @@ def completer(text, state):
             command_name = words[0]
 
             if command_name in COMPLETIONS and (
-                len(words) == 1 or (len(words) >= 1 and ends_with_space)
+                len(words) == 1 or ends_with_space
             ):
                 candidates = run_completer(command_name)
-                completer.matches = [
-                    candidate + " " for candidate in candidates
-                ]
-                completer.bell = False
-                completer.custom = True
+
+                if candidates:
+                    completer.matches = [candidate + " " for candidate in candidates]
+                    completer.bell = False
+                else:
+                    completer.matches = []
+                    completer.bell = True
+
             elif len(words) > 1 or ends_with_space:
                 prefix = "" if ends_with_space else words[-1]
                 matches = get_filename_completions(prefix)
                 completer.matches = matches
                 completer.bell = False
-                completer.custom = False
 
                 if len(matches) == 1:
                     match = matches[0]
@@ -221,16 +222,15 @@ def completer(text, state):
                         completer.matches = [common]
                     else:
                         completer.bell = True
+
             elif "/" in text:
                 matches = get_filename_completions(text)
                 completer.matches = matches
-                completer.bell = len(matches) > 1
-                completer.custom = False
+                completer.bell = not matches or len(matches) > 1
             else:
                 matches = get_completions(text)
                 completer.matches = matches
-                completer.bell = len(matches) > 1
-                completer.custom = False
+                completer.bell = not matches or len(matches) > 1
 
                 if len(matches) == 1:
                     completer.matches = [matches[0] + " "]
@@ -241,14 +241,15 @@ def completer(text, state):
                     else:
                         completer.bell = True
         else:
-            completer.matches = get_completions(text)
-            completer.bell = len(completer.matches) > 1
-            completer.custom = False
+            matches = get_completions(text)
+            completer.matches = matches
+            completer.bell = not matches or len(matches) > 1
+
+    if state == 0 and completer.bell:
+        sys.stdout.write("\a")
+        sys.stdout.flush()
 
     try:
-        if state == 0 and completer.bell:
-            sys.stdout.write("\a")
-            sys.stdout.flush()
         return completer.matches[state]
     except (IndexError, AttributeError):
         return None
