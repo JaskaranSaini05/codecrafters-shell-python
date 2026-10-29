@@ -4,7 +4,7 @@ import sys
 import subprocess
 import readline
 
-BUILTINS = ["echo", "exit", "type", "pwd", "cd"]
+BUILTINS = ["echo", "exit", "type", "pwd", "cd", "complete"]
 
 
 def parse_command(command):
@@ -189,14 +189,15 @@ def completer(text, state):
             matches = get_filename_completions(text)
             completer.is_command = False
         else:
+            prefix = text
             matches = get_completions(text)
             completer.is_command = True
 
+        if last_space >= 0:
+            prefix = before_cursor[last_space + 1:]
+
         completer.matches = matches
-        completer.prefix = prefix if last_space >= 0 else text
-        completer.original_text = text
-        completer.common_prefix = longest_common_prefix(matches)
-        completer.multiple = len(matches) > 1
+        completer.prefix = prefix
         completer.bell = False
 
         if len(matches) == 1:
@@ -207,9 +208,10 @@ def completer(text, state):
                 completer.matches = [match]
 
         elif len(matches) > 1:
-            if completer.common_prefix.startswith(completer.prefix) and len(completer.common_prefix) > len(completer.prefix):
-                completer.matches = [completer.common_prefix]
-                completer.bell = True
+            common = longest_common_prefix(matches)
+
+            if len(common) > len(prefix):
+                completer.matches = [common]
             else:
                 completer.matches = matches
                 completer.bell = True
@@ -221,9 +223,6 @@ def completer(text, state):
             sys.stdout.flush()
         return result
     except (IndexError, AttributeError):
-        if state == 0 and getattr(completer, "bell", False):
-            sys.stdout.write("\a")
-            sys.stdout.flush()
         return None
 
 
@@ -312,7 +311,6 @@ def main():
 
                 if directory == "~":
                     directory = os.environ.get("HOME", "")
-
                 elif directory.startswith("~/"):
                     directory = os.path.join(
                         os.environ.get("HOME", ""),
@@ -345,6 +343,9 @@ def main():
                         print(f"{target} is {found}", file=stdout_target)
                     else:
                         print(f"{target}: not found", file=stdout_target)
+
+            elif name == "complete":
+                pass
 
             else:
                 executable = find_executable(name)
