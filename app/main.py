@@ -5,6 +5,7 @@ import subprocess
 import readline
 
 BUILTINS = ["echo", "exit", "type", "pwd", "cd", "complete"]
+COMPLETIONS = {}
 
 
 def parse_command(command):
@@ -343,11 +344,25 @@ def main():
                         print(f"{target}: not found", file=stdout_target)
 
             elif name == "complete":
-                if len(args) >= 2 and args[0] == "-p":
-                    print(
-                        f"complete: {args[1]}: no completion specification",
-                        file=stderr_target
-                    )
+                if len(args) >= 3 and args[0] == "-C":
+                    script = args[1]
+                    target = args[2]
+                    COMPLETIONS[target] = script
+
+                elif len(args) >= 2 and args[0] == "-p":
+                    target = args[1]
+
+                    if target in COMPLETIONS:
+                        script = COMPLETIONS[target]
+                        print(
+                            f"complete -C '{script}' {target}",
+                            file=stdout_target
+                        )
+                    else:
+                        print(
+                            f"complete: {target}: no completion specification",
+                            file=stderr_target
+                        )
 
             else:
                 executable = find_executable(name)
