@@ -24,7 +24,6 @@ def parse_command(command):
             else:
                 current.append(char)
             started = True
-
         elif quote == '"':
             if char == '"':
                 quote = None
@@ -37,7 +36,6 @@ def parse_command(command):
             else:
                 current.append(char)
             started = True
-
         else:
             if char in ("'", '"'):
                 quote = char
@@ -82,7 +80,6 @@ def parse_command(command):
             else:
                 current.append(char)
                 started = True
-
         i += 1
 
     if started:
@@ -146,10 +143,8 @@ def get_filename_completions(text):
     for entry in entries:
         full_path = os.path.join(search_directory, entry)
         candidate = base + entry
-
         if os.path.isdir(full_path):
             candidate += "/"
-
         matches.append(candidate)
 
     return matches
@@ -170,57 +165,91 @@ def longest_common_prefix(matches):
     return prefix
 
 
+def run_completer(command_name):
+    script = COMPLETIONS.get(command_name)
+    if not script:
+        return []
+
+    try:
+        result = subprocess.run(
+            [script],
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        return result.stdout.splitlines()
+    except OSError:
+        return []
+
+
 def completer(text, state):
     if state == 0:
         line = readline.get_line_buffer()
         end_index = readline.get_endidx()
         before_cursor = line[:end_index]
 
-        last_space = max(
-            before_cursor.rfind(" "),
-            before_cursor.rfind("\t"),
-            before_cursor.rfind("\n")
-        )
+        words = before_cursor.split()
+        ends_with_space = bool(before_cursor) and before_cursor[-1].isspace()
 
-        if last_space >= 0:
-            prefix = before_cursor[last_space + 1:]
-            matches = get_filename_completions(prefix)
-            completer.is_command = False
-        elif "/" in text:
-            prefix = text
-            matches = get_filename_completions(text)
-            completer.is_command = False
-        else:
-            prefix = text
-            matches = get_completions(text)
-            completer.is_command = True
+        if words:
+            command_name = words[0]
 
-        completer.matches = matches
-        completer.prefix = prefix
-        completer.bell = False
-
-        if len(matches) == 1:
-            match = matches[0]
-            if completer.is_command or not match.endswith("/"):
-                completer.matches = [match + " "]
-            else:
-                completer.matches = [match]
-
-        elif len(matches) > 1:
-            common = longest_common_prefix(matches)
-
-            if len(common) > len(prefix):
-                completer.matches = [common]
-            else:
+            if command_name in COMPLETIONS and (
+                len(words) == 1 or (len(words) >= 1 and ends_with_space)
+            ):
+                candidates = run_completer(command_name)
+                completer.matches = [
+                    candidate + " " for candidate in candidates
+                ]
+                completer.bell = False
+                completer.custom = True
+            elif len(words) > 1 or ends_with_space:
+                prefix = "" if ends_with_space else words[-1]
+                matches = get_filename_completions(prefix)
                 completer.matches = matches
-                completer.bell = True
+                completer.bell = False
+                completer.custom = False
+
+                if len(matches) == 1:
+                    match = matches[0]
+                    completer.matches = [
+                        match if match.endswith("/") else match + " "
+                    ]
+                elif len(matches) > 1:
+                    common = longest_common_prefix(matches)
+                    if len(common) > len(prefix):
+                        completer.matches = [common]
+                    else:
+                        completer.bell = True
+            elif "/" in text:
+                matches = get_filename_completions(text)
+                completer.matches = matches
+                completer.bell = len(matches) > 1
+                completer.custom = False
+            else:
+                matches = get_completions(text)
+                completer.matches = matches
+                completer.bell = len(matches) > 1
+                completer.custom = False
+
+                if len(matches) == 1:
+                    completer.matches = [matches[0] + " "]
+                elif len(matches) > 1:
+                    common = longest_common_prefix(matches)
+                    if len(common) > len(text):
+                        completer.matches = [common]
+                    else:
+                        completer.bell = True
+        else:
+            completer.matches = get_completions(text)
+            completer.bell = len(completer.matches) > 1
+            completer.custom = False
 
     try:
-        result = completer.matches[state]
         if state == 0 and completer.bell:
             sys.stdout.write("\a")
             sys.stdout.flush()
-        return result
+        return completer.matches[state]
     except (IndexError, AttributeError):
         return None
 
@@ -345,17 +374,12 @@ def main():
 
             elif name == "complete":
                 if len(args) >= 3 and args[0] == "-C":
-                    script = args[1]
-                    target = args[2]
-                    COMPLETIONS[target] = script
-
+                    COMPLETIONS[args[2]] = args[1]
                 elif len(args) >= 2 and args[0] == "-p":
                     target = args[1]
-
                     if target in COMPLETIONS:
-                        script = COMPLETIONS[target]
                         print(
-                            f"complete -C '{script}' {target}",
+                            f"complete -C '{COMPLETIONS[target]}' {target}",
                             file=stdout_target
                         )
                     else:
