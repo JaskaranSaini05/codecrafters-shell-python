@@ -186,15 +186,13 @@ def completer(text, state):
             matches = get_filename_completions(prefix)
             completer.is_command = False
         elif "/" in text:
+            prefix = text
             matches = get_filename_completions(text)
             completer.is_command = False
         else:
             prefix = text
             matches = get_completions(text)
             completer.is_command = True
-
-        if last_space >= 0:
-            prefix = before_cursor[last_space + 1:]
 
         completer.matches = matches
         completer.prefix = prefix
@@ -345,7 +343,11 @@ def main():
                         print(f"{target}: not found", file=stdout_target)
 
             elif name == "complete":
-                pass
+                if len(args) >= 2 and args[0] == "-p":
+                    print(
+                        f"complete: {args[1]}: no completion specification",
+                        file=stderr_target
+                    )
 
             else:
                 executable = find_executable(name)
