@@ -184,15 +184,15 @@ def longest_common_prefix(matches):
     return prefix
 
 
-# Programmable completion with arguments and environment variables
+# Run programmable completion script
+def run_completer(command_name, current_word, previous_word,
+                  comp_line, comp_point):
 
-def run_completer(command_name, current_word, previous_word, comp_line, comp_point):
     script = COMPLETIONS.get(command_name)
 
     if not script:
         return []
 
-    # Create a separate environment for the completer.
     env = os.environ.copy()
     env["COMP_LINE"] = comp_line
     env["COMP_POINT"] = str(comp_point)
@@ -206,12 +206,18 @@ def run_completer(command_name, current_word, previous_word, comp_line, comp_poi
             env=env
         )
 
-        return result.stdout.splitlines()
+        # Remove empty entries and sort candidates
+        return sorted(set(
+            candidate
+            for candidate in result.stdout.splitlines()
+            if candidate
+        ))
 
     except OSError:
         return []
 
 
+# Readline completion
 def completer(text, state):
     if state == 0:
         line = readline.get_line_buffer()
@@ -233,16 +239,11 @@ def completer(text, state):
 
                 if ends_with_space:
                     current_word = ""
-                    previous_word = (
-                        words[-1] if len(words) > 1 else ""
-                    )
+                    previous_word = words[-1] if len(words) > 1 else ""
                 else:
                     current_word = words[-1]
-                    previous_word = (
-                        words[-2] if len(words) > 2 else ""
-                    )
+                    previous_word = words[-2] if len(words) > 2 else ""
 
-                # Full command line and UTF-8 byte cursor position
                 comp_line = line
                 comp_point = len(
                     line[:end_index].encode("utf-8")
@@ -256,14 +257,17 @@ def completer(text, state):
                     comp_point
                 )
 
-                if candidates:
-                    completer.matches = [
-                        candidate + " " for candidate in candidates
-                    ]
-                    completer.bell = False
+                if len(candidates) == 1:
+                    # Single candidate: complete and add a space
+                    completer.matches = [candidates[0] + " "]
+
+                elif len(candidates) > 1:
+                    # Multiple candidates: readline displays them
+                    # after the second TAB.
+                    completer.matches = candidates
+
                 else:
                     completer.matches = []
-                    completer.bell = True
 
             # Filename completion
             elif len(words) > 1 or ends_with_space:
@@ -271,56 +275,36 @@ def completer(text, state):
 
                 matches = get_filename_completions(prefix)
 
-                completer.matches = matches
-                completer.bell = False
-
                 if len(matches) == 1:
                     match = matches[0]
-
                     completer.matches = [
                         match if match.endswith("/") else match + " "
                     ]
 
                 elif len(matches) > 1:
-                    common = longest_common_prefix(matches)
-
-                    if len(common) > len(prefix):
-                        completer.matches = [common]
-                    else:
-                        completer.bell = True
+                    completer.matches = matches
+                else:
+                    completer.matches = []
 
             elif "/" in text:
                 matches = get_filename_completions(text)
-
                 completer.matches = matches
-                completer.bell = not matches or len(matches) > 1
 
             else:
                 matches = get_completions(text)
 
-                completer.matches = matches
-                completer.bell = not matches or len(matches) > 1
-
                 if len(matches) == 1:
                     completer.matches = [matches[0] + " "]
-
-                elif len(matches) > 1:
-                    common = longest_common_prefix(matches)
-
-                    if len(common) > len(text):
-                        completer.matches = [common]
-                    else:
-                        completer.bell = True
+                else:
+                    completer.matches = matches
 
         else:
             matches = get_completions(text)
 
-            completer.matches = matches
-            completer.bell = not matches or len(matches) > 1
-
-    if state == 0 and completer.bell:
-        sys.stdout.write("\a")
-        sys.stdout.flush()
+            if len(matches) == 1:
+                completer.matches = [matches[0] + " "]
+            else:
+                completer.matches = matches
 
     try:
         return completer.matches[state]
@@ -333,6 +317,7 @@ readline.set_completer(completer)
 readline.parse_and_bind("tab: complete")
 
 
+# Main shell
 def main():
     while True:
         try:
@@ -471,11 +456,11 @@ def main():
 
             elif name == "complete":
 
-                # Register programmable completion
+                # Register completer
                 if len(args) >= 3 and args[0] == "-C":
                     COMPLETIONS[args[2]] = args[1]
 
-                # Display registered completion
+                # Display registered completer
                 elif len(args) >= 2 and args[0] == "-p":
                     target = args[1]
 
