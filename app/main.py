@@ -24,6 +24,7 @@ def parse_command(command):
             else:
                 current.append(char)
             started = True
+
         elif quote == '"':
             if char == '"':
                 quote = None
@@ -36,15 +37,18 @@ def parse_command(command):
             else:
                 current.append(char)
             started = True
+
         else:
             if char in ("'", '"'):
                 quote = char
                 started = True
+
             elif char == "\\":
                 if i + 1 < len(command):
                     i += 1
                     current.append(command[i])
                 started = True
+
             elif command[i:i + 3] in ("1>>", "2>>"):
                 if started:
                     args.append("".join(current))
@@ -52,6 +56,7 @@ def parse_command(command):
                     started = False
                 args.append(command[i:i + 3])
                 i += 2
+
             elif command[i:i + 2] == ">>":
                 if started:
                     args.append("".join(current))
@@ -59,6 +64,7 @@ def parse_command(command):
                     started = False
                 args.append(">>")
                 i += 1
+
             elif command[i:i + 2] in ("1>", "2>"):
                 if started:
                     args.append("".join(current))
@@ -66,20 +72,24 @@ def parse_command(command):
                     started = False
                 args.append(command[i:i + 2])
                 i += 1
+
             elif char == ">":
                 if started:
                     args.append("".join(current))
                     current = []
                     started = False
                 args.append(">")
+
             elif char.isspace():
                 if started:
                     args.append("".join(current))
                     current = []
                     started = False
+
             else:
                 current.append(char)
                 started = True
+
         i += 1
 
     if started:
@@ -92,9 +102,12 @@ def find_executable(name):
     for directory in os.environ.get("PATH", "").split(os.pathsep):
         if not directory:
             directory = "."
+
         path = os.path.join(directory, name)
+
         if os.path.isfile(path) and os.access(path, os.X_OK):
             return path
+
     return None
 
 
@@ -108,12 +121,15 @@ def get_completions(text):
     for directory in os.environ.get("PATH", "").split(os.pathsep):
         if not directory:
             directory = "."
+
         try:
             for filename in os.listdir(directory):
                 if filename.startswith(text):
                     path = os.path.join(directory, filename)
+
                     if os.path.isfile(path) and os.access(path, os.X_OK):
                         matches.add(filename)
+
         except OSError:
             continue
 
@@ -143,8 +159,10 @@ def get_filename_completions(text):
     for entry in entries:
         full_path = os.path.join(search_directory, entry)
         candidate = base + entry
+
         if os.path.isdir(full_path):
             candidate += "/"
+
         matches.append(candidate)
 
     return matches
@@ -159,25 +177,35 @@ def longest_common_prefix(matches):
     for match in matches[1:]:
         while not match.startswith(prefix):
             prefix = prefix[:-1]
+
             if not prefix:
                 return ""
 
     return prefix
 
 
-def run_completer(command_name):
+# Programmable completion
+# Passes exactly three arguments to the completer:
+# argv[1] = command name
+# argv[2] = current word
+# argv[3] = previous word
+
+def run_completer(command_name, current_word, previous_word):
     script = COMPLETIONS.get(command_name)
+
     if not script:
         return []
 
     try:
         result = subprocess.run(
-            [script],
+            [script, command_name, current_word, previous_word],
             capture_output=True,
             text=True,
             check=False
         )
+
         return result.stdout.splitlines()
+
     except OSError:
         return []
 
@@ -187,37 +215,65 @@ def completer(text, state):
         line = readline.get_line_buffer()
         end_index = readline.get_endidx()
         before_cursor = line[:end_index]
+
         words = before_cursor.split()
-        ends_with_space = bool(before_cursor) and before_cursor[-1].isspace()
+        ends_with_space = (
+            bool(before_cursor) and before_cursor[-1].isspace()
+        )
 
         if words:
             command_name = words[0]
 
+            # Programmable completion
             if command_name in COMPLETIONS and (
-                len(words) == 1 or ends_with_space
+                len(words) > 1 or ends_with_space
             ):
-                candidates = run_completer(command_name)
+
+                if ends_with_space:
+                    current_word = ""
+                    previous_word = (
+                        words[-1] if len(words) > 1 else ""
+                    )
+                else:
+                    current_word = words[-1]
+                    previous_word = (
+                        words[-2] if len(words) > 2 else ""
+                    )
+
+                candidates = run_completer(
+                    command_name,
+                    current_word,
+                    previous_word
+                )
 
                 if candidates:
-                    completer.matches = [candidate + " " for candidate in candidates]
+                    completer.matches = [
+                        candidate + " " for candidate in candidates
+                    ]
                     completer.bell = False
                 else:
                     completer.matches = []
                     completer.bell = True
 
+            # Filename completion
             elif len(words) > 1 or ends_with_space:
                 prefix = "" if ends_with_space else words[-1]
+
                 matches = get_filename_completions(prefix)
+
                 completer.matches = matches
                 completer.bell = False
 
                 if len(matches) == 1:
                     match = matches[0]
+
                     completer.matches = [
                         match if match.endswith("/") else match + " "
                     ]
+
                 elif len(matches) > 1:
                     common = longest_common_prefix(matches)
+
                     if len(common) > len(prefix):
                         completer.matches = [common]
                     else:
@@ -225,23 +281,30 @@ def completer(text, state):
 
             elif "/" in text:
                 matches = get_filename_completions(text)
+
                 completer.matches = matches
                 completer.bell = not matches or len(matches) > 1
+
             else:
                 matches = get_completions(text)
+
                 completer.matches = matches
                 completer.bell = not matches or len(matches) > 1
 
                 if len(matches) == 1:
                     completer.matches = [matches[0] + " "]
+
                 elif len(matches) > 1:
                     common = longest_common_prefix(matches)
+
                     if len(common) > len(text):
                         completer.matches = [common]
                     else:
                         completer.bell = True
+
         else:
             matches = get_completions(text)
+
             completer.matches = matches
             completer.bell = not matches or len(matches) > 1
 
@@ -277,6 +340,7 @@ def main():
         output_mode = "w"
         error_mode = "w"
         filtered_parts = []
+
         i = 0
 
         while i < len(parts):
@@ -285,10 +349,13 @@ def main():
             if operator in (">", "1>", ">>", "1>>"):
                 if i + 1 < len(parts):
                     output_file = parts[i + 1]
-                    output_mode = "a" if operator in (">>", "1>>") else "w"
+                    output_mode = (
+                        "a" if operator in (">>", "1>>") else "w"
+                    )
                     i += 2
                 else:
                     i += 1
+
             elif operator in ("2>", "2>>"):
                 if i + 1 < len(parts):
                     error_file = parts[i + 1]
@@ -296,6 +363,7 @@ def main():
                     i += 2
                 else:
                     i += 1
+
             else:
                 filtered_parts.append(parts[i])
                 i += 1
@@ -307,19 +375,24 @@ def main():
 
         name = parts[0]
         args = parts[1:]
+
         output = None
         error_output = None
 
         try:
             if output_file is not None:
                 output = open(output_file, output_mode)
+
             if error_file is not None:
                 error_output = open(error_file, error_mode)
+
         except OSError:
             if output is not None:
                 output.close()
+
             if error_output is not None:
                 error_output.close()
+
             continue
 
         stdout_target = output if output is not None else sys.stdout
@@ -340,6 +413,7 @@ def main():
 
                 if directory == "~":
                     directory = os.environ.get("HOME", "")
+
                 elif directory.startswith("~/"):
                     directory = os.path.join(
                         os.environ.get("HOME", ""),
@@ -348,6 +422,7 @@ def main():
 
                 try:
                     os.chdir(directory)
+
                 except OSError:
                     print(
                         f"cd: {args[0]}: No such file or directory",
@@ -365,19 +440,35 @@ def main():
                 target = args[0]
 
                 if target in BUILTINS:
-                    print(f"{target} is a shell builtin", file=stdout_target)
+                    print(
+                        f"{target} is a shell builtin",
+                        file=stdout_target
+                    )
+
                 else:
                     found = find_executable(target)
+
                     if found:
-                        print(f"{target} is {found}", file=stdout_target)
+                        print(
+                            f"{target} is {found}",
+                            file=stdout_target
+                        )
                     else:
-                        print(f"{target}: not found", file=stdout_target)
+                        print(
+                            f"{target}: not found",
+                            file=stdout_target
+                        )
 
             elif name == "complete":
+
+                # Register programmable completion
                 if len(args) >= 3 and args[0] == "-C":
                     COMPLETIONS[args[2]] = args[1]
+
+                # Display registered completion
                 elif len(args) >= 2 and args[0] == "-p":
                     target = args[1]
+
                     if target in COMPLETIONS:
                         print(
                             f"complete -C '{COMPLETIONS[target]}' {target}",
@@ -400,14 +491,23 @@ def main():
                             stdout=output,
                             stderr=error_output
                         )
+
                     except OSError:
-                        print(f"{name}: command not found", file=stderr_target)
+                        print(
+                            f"{name}: command not found",
+                            file=stderr_target
+                        )
+
                 else:
-                    print(f"{name}: command not found", file=stderr_target)
+                    print(
+                        f"{name}: command not found",
+                        file=stderr_target
+                    )
 
         finally:
             if output is not None:
                 output.close()
+
             if error_output is not None:
                 error_output.close()
 
