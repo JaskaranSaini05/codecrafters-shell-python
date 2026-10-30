@@ -129,7 +129,6 @@ def get_completions(text):
 
                     if os.path.isfile(path) and os.access(path, os.X_OK):
                         matches.add(filename)
-
         except OSError:
             continue
 
@@ -184,10 +183,7 @@ def longest_common_prefix(matches):
     return prefix
 
 
-# Programmable completion
-def run_completer(command_name, current_word, previous_word,
-                  comp_line, comp_point):
-
+def run_completer(command_name, current_word, previous_word, comp_line, comp_point):
     script = COMPLETIONS.get(command_name)
 
     if not script:
@@ -206,25 +202,21 @@ def run_completer(command_name, current_word, previous_word,
             env=env
         )
 
-        candidates = [
+        return sorted(set(
             candidate
             for candidate in result.stdout.splitlines()
             if candidate
-        ]
-
-        return sorted(set(candidates))
+        ))
 
     except OSError:
         return []
 
 
-# Tab completion
 def completer(text, state):
     if state == 0:
         line = readline.get_line_buffer()
         end_index = readline.get_endidx()
         before_cursor = line[:end_index]
-
         words = before_cursor.split()
 
         ends_with_space = (
@@ -234,73 +226,54 @@ def completer(text, state):
         if words:
             command_name = words[0]
 
-            # Programmable completion
             if command_name in COMPLETIONS and (
                 len(words) > 1 or ends_with_space
             ):
-
                 if ends_with_space:
                     current_word = ""
-                    previous_word = words[-1] if words else ""
-
+                    previous_word = words[-1]
                 else:
                     current_word = words[-1]
+                    previous_word = words[-2] if len(words) >= 2 else ""
 
-                    # IMPORTANT FIX:
-                    # For "git sta", previous_word must be "git".
-                    # For "git remote sta", previous_word must be "remote".
-                    previous_word = (
-                        words[-2] if len(words) >= 2 else ""
-                    )
-
-                comp_line = line
-
-                # COMP_POINT is a UTF-8 byte index.
-                comp_point = len(
-                    line[:end_index].encode("utf-8")
-                )
+                comp_point = len(before_cursor.encode("utf-8"))
 
                 candidates = run_completer(
                     command_name,
                     current_word,
                     previous_word,
-                    comp_line,
+                    line,
                     comp_point
                 )
 
                 if len(candidates) == 1:
-                    # One candidate: complete and add a space.
-                    completer.matches = [
-                        candidates[0] + " "
-                    ]
+                    completer.matches = [candidates[0] + " "]
 
                 elif len(candidates) > 1:
-                    # Multiple candidates: readline handles
-                    # the second TAB and displays the list.
-                    completer.matches = candidates
+                    prefix = longest_common_prefix(candidates)
+
+                    if len(prefix) > len(current_word):
+                        completer.matches = [prefix]
+                    else:
+                        completer.matches = candidates
 
                 else:
                     completer.matches = []
 
-            # Filename completion
             elif len(words) > 1 or ends_with_space:
                 prefix = "" if ends_with_space else words[-1]
-
                 matches = get_filename_completions(prefix)
 
                 if len(matches) == 1:
                     match = matches[0]
-
                     completer.matches = [
                         match if match.endswith("/") else match + " "
                     ]
-
                 else:
                     completer.matches = matches
 
             elif "/" in text:
-                matches = get_filename_completions(text)
-                completer.matches = matches
+                completer.matches = get_filename_completions(text)
 
             else:
                 matches = get_completions(text)
@@ -325,16 +298,15 @@ def completer(text, state):
 
 
 readline.set_completer_delims(" \t\n")
+readline.set_completion_append_character("")
 readline.set_completer(completer)
 readline.parse_and_bind("tab: complete")
 
 
-# Main shell
 def main():
     while True:
         try:
             command = input("$ ")
-
         except EOFError:
             break
 
@@ -347,7 +319,6 @@ def main():
         error_file = None
         output_mode = "w"
         error_mode = "w"
-
         filtered_parts = []
 
         i = 0
@@ -358,11 +329,7 @@ def main():
             if operator in (">", "1>", ">>", "1>>"):
                 if i + 1 < len(parts):
                     output_file = parts[i + 1]
-
-                    output_mode = (
-                        "a" if operator in (">>", "1>>") else "w"
-                    )
-
+                    output_mode = "a" if operator in (">>", "1>>") else "w"
                     i += 2
                 else:
                     i += 1
@@ -370,11 +337,7 @@ def main():
             elif operator in ("2>", "2>>"):
                 if i + 1 < len(parts):
                     error_file = parts[i + 1]
-
-                    error_mode = (
-                        "a" if operator == "2>>" else "w"
-                    )
-
+                    error_mode = "a" if operator == "2>>" else "w"
                     i += 2
                 else:
                     i += 1
@@ -404,19 +367,12 @@ def main():
         except OSError:
             if output is not None:
                 output.close()
-
             if error_output is not None:
                 error_output.close()
-
             continue
 
-        stdout_target = (
-            output if output is not None else sys.stdout
-        )
-
-        stderr_target = (
-            error_output if error_output is not None else sys.stderr
-        )
+        stdout_target = output if output is not None else sys.stdout
+        stderr_target = error_output if error_output is not None else sys.stderr
 
         try:
             if name == "exit":
@@ -433,7 +389,6 @@ def main():
 
                 if directory == "~":
                     directory = os.environ.get("HOME", "")
-
                 elif directory.startswith("~/"):
                     directory = os.path.join(
                         os.environ.get("HOME", ""),
@@ -442,7 +397,6 @@ def main():
 
                 try:
                     os.chdir(directory)
-
                 except OSError:
                     print(
                         f"cd: {args[0]}: No such file or directory",
@@ -460,33 +414,19 @@ def main():
                 target = args[0]
 
                 if target in BUILTINS:
-                    print(
-                        f"{target} is a shell builtin",
-                        file=stdout_target
-                    )
-
+                    print(f"{target} is a shell builtin", file=stdout_target)
                 else:
                     found = find_executable(target)
 
                     if found:
-                        print(
-                            f"{target} is {found}",
-                            file=stdout_target
-                        )
-
+                        print(f"{target} is {found}", file=stdout_target)
                     else:
-                        print(
-                            f"{target}: not found",
-                            file=stdout_target
-                        )
+                        print(f"{target}: not found", file=stdout_target)
 
             elif name == "complete":
-
-                # Register completion
                 if len(args) >= 3 and args[0] == "-C":
                     COMPLETIONS[args[2]] = args[1]
 
-                # Display registered completion
                 elif len(args) >= 2 and args[0] == "-p":
                     target = args[1]
 
@@ -495,14 +435,12 @@ def main():
                             f"complete -C '{COMPLETIONS[target]}' {target}",
                             file=stdout_target
                         )
-
                     else:
                         print(
                             f"complete: {target}: no completion specification",
                             file=stderr_target
                         )
 
-                # Unregister completion
                 elif len(args) >= 2 and args[0] == "-r":
                     COMPLETIONS.pop(args[1], None)
 
@@ -517,13 +455,11 @@ def main():
                             stdout=output,
                             stderr=error_output
                         )
-
                     except OSError:
                         print(
                             f"{name}: command not found",
                             file=stderr_target
                         )
-
                 else:
                     print(
                         f"{name}: command not found",
