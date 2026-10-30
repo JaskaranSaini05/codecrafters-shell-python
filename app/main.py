@@ -184,7 +184,7 @@ def longest_common_prefix(matches):
     return prefix
 
 
-# Run programmable completion script
+# Programmable completion
 def run_completer(command_name, current_word, previous_word,
                   comp_line, comp_point):
 
@@ -206,18 +206,19 @@ def run_completer(command_name, current_word, previous_word,
             env=env
         )
 
-        # Remove empty entries and sort candidates
-        return sorted(set(
+        candidates = [
             candidate
             for candidate in result.stdout.splitlines()
             if candidate
-        ))
+        ]
+
+        return sorted(set(candidates))
 
     except OSError:
         return []
 
 
-# Readline completion
+# Tab completion
 def completer(text, state):
     if state == 0:
         line = readline.get_line_buffer()
@@ -225,6 +226,7 @@ def completer(text, state):
         before_cursor = line[:end_index]
 
         words = before_cursor.split()
+
         ends_with_space = (
             bool(before_cursor) and before_cursor[-1].isspace()
         )
@@ -239,12 +241,21 @@ def completer(text, state):
 
                 if ends_with_space:
                     current_word = ""
-                    previous_word = words[-1] if len(words) > 1 else ""
+                    previous_word = words[-1] if words else ""
+
                 else:
                     current_word = words[-1]
-                    previous_word = words[-2] if len(words) > 2 else ""
+
+                    # IMPORTANT FIX:
+                    # For "git sta", previous_word must be "git".
+                    # For "git remote sta", previous_word must be "remote".
+                    previous_word = (
+                        words[-2] if len(words) >= 2 else ""
+                    )
 
                 comp_line = line
+
+                # COMP_POINT is a UTF-8 byte index.
                 comp_point = len(
                     line[:end_index].encode("utf-8")
                 )
@@ -258,12 +269,14 @@ def completer(text, state):
                 )
 
                 if len(candidates) == 1:
-                    # Single candidate: complete and add a space
-                    completer.matches = [candidates[0] + " "]
+                    # One candidate: complete and add a space.
+                    completer.matches = [
+                        candidates[0] + " "
+                    ]
 
                 elif len(candidates) > 1:
-                    # Multiple candidates: readline displays them
-                    # after the second TAB.
+                    # Multiple candidates: readline handles
+                    # the second TAB and displays the list.
                     completer.matches = candidates
 
                 else:
@@ -277,14 +290,13 @@ def completer(text, state):
 
                 if len(matches) == 1:
                     match = matches[0]
+
                     completer.matches = [
                         match if match.endswith("/") else match + " "
                     ]
 
-                elif len(matches) > 1:
-                    completer.matches = matches
                 else:
-                    completer.matches = []
+                    completer.matches = matches
 
             elif "/" in text:
                 matches = get_filename_completions(text)
@@ -322,6 +334,7 @@ def main():
     while True:
         try:
             command = input("$ ")
+
         except EOFError:
             break
 
@@ -334,6 +347,7 @@ def main():
         error_file = None
         output_mode = "w"
         error_mode = "w"
+
         filtered_parts = []
 
         i = 0
@@ -344,9 +358,11 @@ def main():
             if operator in (">", "1>", ">>", "1>>"):
                 if i + 1 < len(parts):
                     output_file = parts[i + 1]
+
                     output_mode = (
                         "a" if operator in (">>", "1>>") else "w"
                     )
+
                     i += 2
                 else:
                     i += 1
@@ -354,7 +370,11 @@ def main():
             elif operator in ("2>", "2>>"):
                 if i + 1 < len(parts):
                     error_file = parts[i + 1]
-                    error_mode = "a" if operator == "2>>" else "w"
+
+                    error_mode = (
+                        "a" if operator == "2>>" else "w"
+                    )
+
                     i += 2
                 else:
                     i += 1
@@ -390,8 +410,13 @@ def main():
 
             continue
 
-        stdout_target = output if output is not None else sys.stdout
-        stderr_target = error_output if error_output is not None else sys.stderr
+        stdout_target = (
+            output if output is not None else sys.stdout
+        )
+
+        stderr_target = (
+            error_output if error_output is not None else sys.stderr
+        )
 
         try:
             if name == "exit":
@@ -448,6 +473,7 @@ def main():
                             f"{target} is {found}",
                             file=stdout_target
                         )
+
                     else:
                         print(
                             f"{target}: not found",
@@ -456,11 +482,11 @@ def main():
 
             elif name == "complete":
 
-                # Register completer
+                # Register completion
                 if len(args) >= 3 and args[0] == "-C":
                     COMPLETIONS[args[2]] = args[1]
 
-                # Display registered completer
+                # Display registered completion
                 elif len(args) >= 2 and args[0] == "-p":
                     target = args[1]
 
@@ -469,11 +495,16 @@ def main():
                             f"complete -C '{COMPLETIONS[target]}' {target}",
                             file=stdout_target
                         )
+
                     else:
                         print(
                             f"complete: {target}: no completion specification",
                             file=stderr_target
                         )
+
+                # Unregister completion
+                elif len(args) >= 2 and args[0] == "-r":
+                    COMPLETIONS.pop(args[1], None)
 
             else:
                 executable = find_executable(name)
