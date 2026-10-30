@@ -184,24 +184,26 @@ def longest_common_prefix(matches):
     return prefix
 
 
-# Programmable completion
-# Passes exactly three arguments to the completer:
-# argv[1] = command name
-# argv[2] = current word
-# argv[3] = previous word
+# Programmable completion with arguments and environment variables
 
-def run_completer(command_name, current_word, previous_word):
+def run_completer(command_name, current_word, previous_word, comp_line, comp_point):
     script = COMPLETIONS.get(command_name)
 
     if not script:
         return []
+
+    # Create a separate environment for the completer.
+    env = os.environ.copy()
+    env["COMP_LINE"] = comp_line
+    env["COMP_POINT"] = str(comp_point)
 
     try:
         result = subprocess.run(
             [script, command_name, current_word, previous_word],
             capture_output=True,
             text=True,
-            check=False
+            check=False,
+            env=env
         )
 
         return result.stdout.splitlines()
@@ -240,10 +242,18 @@ def completer(text, state):
                         words[-2] if len(words) > 2 else ""
                     )
 
+                # Full command line and UTF-8 byte cursor position
+                comp_line = line
+                comp_point = len(
+                    line[:end_index].encode("utf-8")
+                )
+
                 candidates = run_completer(
                     command_name,
                     current_word,
-                    previous_word
+                    previous_word,
+                    comp_line,
+                    comp_point
                 )
 
                 if candidates:
