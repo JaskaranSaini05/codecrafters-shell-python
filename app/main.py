@@ -3,9 +3,25 @@ import os
 import sys
 import subprocess
 import readline
+import ctypes
+import ctypes.util
 
 BUILTINS = ["echo", "exit", "type", "pwd", "cd", "complete"]
 COMPLETIONS = {}
+
+try:
+    readline_library_name = ctypes.util.find_library("readline")
+    readline_library = ctypes.CDLL(readline_library_name) if readline_library_name else None
+    append_character = ctypes.c_int.in_dll(
+        readline_library, "rl_completion_append_character"
+    ) if readline_library else None
+except (OSError, ValueError):
+    append_character = None
+
+
+def set_append_character(char):
+    if append_character is not None:
+        append_character.value = ord(char)
 
 
 def parse_command(command):
@@ -214,6 +230,8 @@ def run_completer(command_name, current_word, previous_word, comp_line, comp_poi
 
 def completer(text, state):
     if state == 0:
+        set_append_character(" ")
+
         line = readline.get_line_buffer()
         end_index = readline.get_endidx()
         before_cursor = line[:end_index]
@@ -253,6 +271,7 @@ def completer(text, state):
                     prefix = longest_common_prefix(candidates)
 
                     if len(prefix) > len(current_word):
+                        set_append_character("\0")
                         completer.matches = [prefix]
                     else:
                         completer.matches = candidates
@@ -298,7 +317,6 @@ def completer(text, state):
 
 
 readline.set_completer_delims(" \t\n")
-readline.set_completion_append_character("")
 readline.set_completer(completer)
 readline.parse_and_bind("tab: complete")
 
