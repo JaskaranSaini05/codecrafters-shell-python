@@ -6,7 +6,7 @@ import readline
 import ctypes
 import ctypes.util
 
-BUILTINS = ["echo", "exit", "type", "pwd", "cd", "complete"]
+BUILTINS = ["echo", "exit", "type", "pwd", "cd", "complete", "jobs"]
 COMPLETIONS = {}
 
 try:
@@ -395,6 +395,9 @@ def main():
         try:
             if name == "exit":
                 return
+
+            elif name == "jobs":
+                pass
 
             elif name == "pwd":
                 print(os.getcwd(), file=stdout_target)
